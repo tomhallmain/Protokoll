@@ -8,7 +8,7 @@ import os
 from ..internal.tracker import Tracker
 from ..utils.config_manager import ConfigManager
 from ..utils.theme_manager import ThemeManager
-from .create_tracker_dialog import CreateTrackerDialog
+from .tracker_dialog import TrackerDialog
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -42,6 +42,7 @@ class MainWindow(QMainWindow):
         self.tracker_list = QListWidget()
         self.tracker_list.setObjectName("trackerList")
         self.tracker_list.currentItemChanged.connect(self.on_tracker_selected)
+        self.tracker_list.itemDoubleClicked.connect(self.edit_tracker)
         
         # Buttons for tracker management
         create_btn = QPushButton("Create New Tracker")
@@ -200,7 +201,7 @@ class MainWindow(QMainWindow):
     
     def create_tracker(self):
         """Create a new tracker."""
-        dialog = CreateTrackerDialog(self)
+        dialog = TrackerDialog(parent=self)
         if dialog.exec():
             data = dialog.get_tracker_data()
             try:
@@ -298,6 +299,51 @@ class MainWindow(QMainWindow):
                 f'<span style="color: #d4d4d4;">Content: {result["content"]}</span>\n'
                 f'<span style="color: #3c3c3c;">{"-" * 50}</span>\n'
             )
+    
+    def edit_tracker(self, item):
+        """Edit the selected tracker"""
+        if not item:
+            return
+        
+        tracker_name = item.text()
+        tracker = Tracker.load(tracker_name, self.config_manager)
+        if not tracker:
+            QMessageBox.critical(self, "Error", f"Failed to load tracker: {tracker_name}")
+            return
+        
+        dialog = TrackerDialog(tracker, self)
+        if dialog.exec():
+            data = dialog.get_tracker_data()
+            try:
+                # Update tracker properties
+                tracker.name = data["name"]
+                tracker.description = data["description"]
+                
+                # Update log directories
+                current_dirs = set(tracker.get_log_directories())
+                new_dirs = set(data["log_directories"])
+                
+                # Remove directories that are no longer tracked
+                for directory in current_dirs - new_dirs:
+                    tracker.remove_log_directory(directory)
+                
+                # Add new directories
+                for directory in new_dirs - current_dirs:
+                    tracker.add_log_directory(directory)
+                
+                # Save changes
+                tracker.save_metadata()
+                
+                # Update UI
+                self.load_trackers()
+                
+                # Select the updated tracker
+                items = self.tracker_list.findItems(data["name"], Qt.MatchFlag.MatchExactly)
+                if items:
+                    self.tracker_list.setCurrentItem(items[0])
+                    
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to update tracker: {str(e)}")
     
     def closeEvent(self, event):
         """Handle window close event"""
