@@ -45,6 +45,7 @@ class FindLogDirsDialog(QDialog):
         super().__init__(parent)
         self.app_name = app_name
         self.selected_directories = []
+        self.search_thread = None
         
         logger.info(f"Initializing FindLogDirsDialog for app: {app_name}")
         
@@ -179,4 +180,28 @@ class FindLogDirsDialog(QDialog):
                 logger.debug(f"Selected potential match: {item.text()}")
         
         logger.info(f"Total selected directories: {len(selected)}")
-        return selected 
+        return selected
+
+    def closeEvent(self, event):
+        """Handle dialog close event."""
+        logger.debug("Dialog closing, cleaning up search thread")
+        if self.search_thread and self.search_thread.isRunning():
+            self.search_thread.terminate()
+            self.search_thread.wait()
+        super().closeEvent(event)
+    
+    def reject(self):
+        """Handle dialog rejection (Cancel button)."""
+        logger.debug("Dialog rejected, cleaning up search thread")
+        if self.search_thread and self.search_thread.isRunning():
+            self.search_thread.terminate()
+            self.search_thread.wait()
+        super().reject()
+    
+    def accept(self):
+        """Handle dialog acceptance (Add Selected button)."""
+        logger.debug("Dialog accepted, cleaning up search thread")
+        if self.search_thread and self.search_thread.isRunning():
+            self.search_thread.terminate()
+            self.search_thread.wait()
+        super().accept() 
