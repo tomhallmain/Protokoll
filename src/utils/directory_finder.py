@@ -5,6 +5,7 @@ import time
 import json
 from typing import Dict, List, Set, Tuple
 from .logging_manager import LoggingManager
+from .utils import Utils
 
 logger = LoggingManager.get_logger('utils.directory_finder')
 
@@ -88,7 +89,7 @@ class DirectoryFinder:
     CACHE_FILE = os.path.join(os.path.expanduser('~'), '.protokoll', 'custom_log_dirs.json')
     
     @staticmethod
-    def _load_custom_directories() -> Dict[str, List[str]]:
+    def _load_custom_directories() -> List[str]:
         """Load custom log directories from cache file."""
         try:
             if os.path.exists(DirectoryFinder.CACHE_FILE):
@@ -96,10 +97,10 @@ class DirectoryFinder:
                     return json.load(f)
         except Exception as e:
             logger.error(f"Error loading custom directories: {str(e)}")
-        return {}
+        return []
     
     @staticmethod
-    def _save_custom_directories(directories: Dict[str, List[str]]) -> None:
+    def _save_custom_directories(directories: List[str]) -> None:
         """Save custom log directories to cache file."""
         try:
             os.makedirs(os.path.dirname(DirectoryFinder.CACHE_FILE), exist_ok=True)
@@ -109,84 +110,80 @@ class DirectoryFinder:
             logger.error(f"Error saving custom directories: {str(e)}")
     
     @staticmethod
-    def add_custom_directory(app_name: str, directory: str) -> Tuple[bool, str]:
+    def add_custom_directory(directory: str) -> Tuple[bool, str]:
         """
-        Add a custom log directory for an application.
+        Add a custom log directory to the shared list.
         
         Args:
-            app_name: The name of the application
             directory: The directory path to add
             
         Returns:
             Tuple of (success, message)
         """
-        if not os.path.exists(directory):
-            return False, f"Directory does not exist: {directory}"
-        
-        if not os.path.isdir(directory):
-            return False, f"Path is not a directory: {directory}"
-        
-        # Validate the directory is safe to traverse
         try:
-            rel_path = os.path.relpath(directory)
-            if any(skip_dir in rel_path.split(os.sep) for skip_dir in DirectoryFinder.SKIP_DIRS):
-                return False, f"Directory contains system directories that should not be traversed: {directory}"
-        except Exception as e:
-            return False, f"Error validating directory: {str(e)}"
-        
-        # Load existing directories
-        custom_dirs = DirectoryFinder._load_custom_directories()
-        
-        # Add new directory
-        if app_name not in custom_dirs:
-            custom_dirs[app_name] = []
-        
-        if directory not in custom_dirs[app_name]:
-            custom_dirs[app_name].append(directory)
+            # Validate directory exists and is accessible
+            if not os.path.exists(directory):
+                return False, f"Directory does not exist: {directory}"
+            if not os.path.isdir(directory):
+                return False, f"Path is not a directory: {directory}"
+            
+            # Load existing directories
+            custom_dirs = DirectoryFinder._load_custom_directories()
+            
+            # Check if directory is already in the list
+            if directory in custom_dirs:
+                return False, f"Directory already in custom directories: {directory}"
+            
+            # Add directory to list
+            custom_dirs.append(directory)
+            
+            # Save updated list
             DirectoryFinder._save_custom_directories(custom_dirs)
-            logger.info(f"Added custom log directory for {app_name}: {directory}")
-            return True, f"Added custom log directory: {directory}"
-        
-        return False, f"Directory already exists for {app_name}: {directory}"
+            
+            return True, f"Added custom directory: {directory}"
+            
+        except Exception as e:
+            return False, f"Error adding custom directory: {str(e)}"
     
     @staticmethod
-    def remove_custom_directory(app_name: str, directory: str) -> Tuple[bool, str]:
+    def remove_custom_directory(directory: str) -> Tuple[bool, str]:
         """
-        Remove a custom log directory for an application.
+        Remove a custom log directory from the shared list.
         
         Args:
-            app_name: The name of the application
             directory: The directory path to remove
             
         Returns:
             Tuple of (success, message)
         """
-        custom_dirs = DirectoryFinder._load_custom_directories()
-        
-        if app_name not in custom_dirs or directory not in custom_dirs[app_name]:
-            return False, f"No custom directory found for {app_name}: {directory}"
-        
-        custom_dirs[app_name].remove(directory)
-        if not custom_dirs[app_name]:
-            del custom_dirs[app_name]
-        
-        DirectoryFinder._save_custom_directories(custom_dirs)
-        logger.info(f"Removed custom log directory for {app_name}: {directory}")
-        return True, f"Removed custom log directory: {directory}"
+        try:
+            # Load existing directories
+            custom_dirs = DirectoryFinder._load_custom_directories()
+            
+            # Check if directory is in the list
+            if directory not in custom_dirs:
+                return False, f"Directory not found in custom directories: {directory}"
+            
+            # Remove directory from list
+            custom_dirs.remove(directory)
+            
+            # Save updated list
+            DirectoryFinder._save_custom_directories(custom_dirs)
+            
+            return True, f"Removed custom directory: {directory}"
+            
+        except Exception as e:
+            return False, f"Error removing custom directory: {str(e)}"
     
     @staticmethod
-    def get_custom_directories(app_name: str) -> List[str]:
+    def get_custom_directories() -> List[str]:
         """
-        Get custom log directories for an application.
+        Get the list of custom log directories.
         
-        Args:
-            app_name: The name of the application
-            
         Returns:
             List of custom directory paths
         """
-        custom_dirs = DirectoryFinder._load_custom_directories()
-        return custom_dirs.get(app_name, [])
+        return DirectoryFinder._load_custom_directories()
     
     @staticmethod
     def get_app_data_directories() -> List[str]:
@@ -272,6 +269,10 @@ class DirectoryFinder:
         dirs_checked = 0
         dirs_skipped = 0
         
+        # Store directory information for potential matches
+        # Key: directory basename (lowercase), Value: list of full paths
+        potential_dirs: Dict[str, List[str]] = {}
+        
         def should_skip_dir(dir_path: str, base_dir: str) -> bool:
             """Helper function to check if a directory should be skipped"""
             try:
@@ -295,74 +296,10 @@ class DirectoryFinder:
                 logger.error(f"Error checking directory {dir_path}: {str(e)}")
                 raise
         
-        def check_directory_for_logs(dir_path: str) -> None:
-            """Helper function to check a directory for log files and matches"""
+        def search_directory(base_dir: str, check_exact_only: bool = False) -> None:
+            """Search a directory and its subdirectories for log directories"""
             nonlocal dirs_checked
-            dirs_checked += 1
             
-            try:
-                # Check if directory exists and is accessible
-                if not os.path.exists(dir_path) or not os.path.isdir(dir_path):
-                    return
-                
-                # List directory contents
-                try:
-                    files = os.listdir(dir_path)
-                except PermissionError:
-                    return
-                
-                # Check for log files
-                has_log_files = False
-                for file in files:
-                    if os.path.isfile(os.path.join(dir_path, file)):
-                        if any(file.lower().endswith(ext) for ext in DirectoryFinder.LOG_EXTENSIONS):
-                            has_log_files = True
-                            break
-                
-                if not has_log_files:
-                    return
-                
-                # Check directory name against patterns
-                dir_name = os.path.basename(dir_path).lower()
-                
-                # Check for exact matches
-                if app_name_lower in dir_name:
-                    logger.info(f"Found exact match: {dir_path}")
-                    exact_matches.add(dir_path)
-                    return
-                
-                # Check for potential matches
-                if any(re.search(pattern, dir_name, re.IGNORECASE) for pattern in DirectoryFinder.LOG_PATTERNS):
-                    # Only add as potential match if the app name is in the path
-                    if app_name_lower in dir_path.lower():
-                        logger.info(f"Found potential match: {dir_path}")
-                        potential_matches.add(dir_path)
-            
-            except Exception as e:
-                logger.error(f"Error checking directory {dir_path}: {str(e)}")
-        
-        # First, check custom directories
-        custom_dirs = DirectoryFinder.get_custom_directories(app_name)
-        if custom_dirs:
-            logger.debug(f"Checking custom directories for {app_name}: {', '.join(custom_dirs)}")
-            for custom_dir in custom_dirs:
-                check_directory_for_logs(custom_dir)
-        
-        # If we found matches in custom directories, return them
-        if exact_matches or potential_matches:
-            total_time = time.time() - start_time
-            logger.info(f"Found matches in custom directories: {len(exact_matches)} exact, {len(potential_matches)} potential")
-            logger.debug(f"Search completed in {total_time:.2f}s (checked {dirs_checked} dirs)")
-            return {
-                'exact_matches': sorted(list(exact_matches)),
-                'potential_matches': sorted(list(potential_matches))
-            }
-        
-        # If no matches in custom directories, search in app data directories
-        app_data_dirs = DirectoryFinder.get_app_data_directories()
-        logger.debug(f"Searching in app data directories: {', '.join(app_data_dirs)}")
-        
-        for base_dir in app_data_dirs:
             try:
                 logger.debug(f"Starting search in: {base_dir}")
                 base_start_time = time.time()
@@ -371,6 +308,7 @@ class DirectoryFinder:
                 # Walk through the directory tree with depth limit
                 for root, dirs, files in os.walk(base_dir):
                     current_time = time.time()
+                    dirs_checked += 1
                     
                     # Log progress every 2 seconds
                     if current_time - last_log_time >= 2:
@@ -380,124 +318,183 @@ class DirectoryFinder:
                     # Filter out directories that should be skipped BEFORE os.walk continues
                     dirs[:] = [d for d in dirs if not should_skip_dir(os.path.join(root, d), base_dir)]
                     
-                    # Check if this directory contains log files
-                    has_log_files = False
-                    for file in files:
-                        if any(file.lower().endswith(ext) for ext in DirectoryFinder.LOG_EXTENSIONS):
-                            has_log_files = True
-                            break
+                    try:
+                        # Check if directory exists and is accessible
+                        if not os.path.isdir(root):
+                            continue
+                        
+                        # Check directory name against patterns FIRST (cheap check)
+                        dir_name = os.path.basename(root).lower()
+                        
+                        # Check for exact matches (case-insensitive)
+                        if dir_name == app_name_lower:
+                            # Found a matching directory name, now check for log files in this directory and its subdirectories
+                            has_log_files = False
+                            try:
+                                # Check current directory
+                                for file in os.listdir(root):
+                                    if os.path.isfile(os.path.join(root, file)):
+                                        if any(file.lower().endswith(ext) for ext in DirectoryFinder.LOG_EXTENSIONS):
+                                            has_log_files = True
+                                            break
+                                
+                                # If no log files in current directory, check subdirectories up to max_depth
+                                if not has_log_files:
+                                    for subdir, _, files in os.walk(root):
+                                        # Calculate depth relative to the matching directory
+                                        rel_path = os.path.relpath(subdir, root)
+                                        current_depth = len(rel_path.split(os.sep)) if rel_path != '.' else 0
+                                        
+                                        if current_depth > max_depth:
+                                            continue
+                                        
+                                        for file in files:
+                                            if any(file.lower().endswith(ext) for ext in DirectoryFinder.LOG_EXTENSIONS):
+                                                has_log_files = True
+                                                break
+                                        
+                                        if has_log_files:
+                                            break
+                            except PermissionError:
+                                continue
+                            
+                            if has_log_files:
+                                logger.info(f"Found exact match with log files: {root}")
+                                exact_matches.add(root)
+                            else:
+                                logger.info(f"Found exact match without log files: {root}")
+                                # Still add as potential match since the name matches
+                                if dir_name not in potential_dirs:
+                                    potential_dirs[dir_name] = []
+                                potential_dirs[dir_name].append(root)
+                            continue
+                        
+                        # If we're only checking for exact matches, continue to next directory
+                        if check_exact_only:
+                            continue
+                        
+                        # Store directory for potential match checking
+                        if dir_name not in potential_dirs:
+                            potential_dirs[dir_name] = []
+                        potential_dirs[dir_name].append(root)
+                        
+                        # Only check for log files if we're interested in this directory
+                        try:
+                            files = os.listdir(root)
+                        except PermissionError:
+                            continue
+                        
+                        # Check for log files
+                        has_log_files = False
+                        for file in files:
+                            if os.path.isfile(os.path.join(root, file)):
+                                if any(file.lower().endswith(ext) for ext in DirectoryFinder.LOG_EXTENSIONS):
+                                    has_log_files = True
+                                    break
+                        
+                        if not has_log_files:
+                            # Remove from potential matches if no log files found
+                            if dir_name in potential_dirs:
+                                potential_dirs[dir_name].remove(root)
+                                if not potential_dirs[dir_name]:
+                                    del potential_dirs[dir_name]
                     
-                    if not has_log_files:
-                        continue
-                    
-                    # Check directory name against patterns
-                    dir_name = os.path.basename(root).lower()
-                    
-                    # Check for exact matches
-                    if app_name_lower in dir_name:
-                        logger.info(f"Found exact match: {root}")
-                        exact_matches.add(root)
-                        continue
-                    
-                    # Check for potential matches
-                    if any(re.search(pattern, dir_name, re.IGNORECASE) for pattern in DirectoryFinder.LOG_PATTERNS):
-                        # Only add as potential match if the app name is in the path
-                        if app_name_lower in root.lower():
-                            logger.info(f"Found potential match: {root}")
-                            potential_matches.add(root)
+                    except Exception as e:
+                        logger.error(f"Error checking directory {root}: {str(e)}")
                 
                 base_time = time.time() - base_start_time
                 logger.debug(f"Completed search in {base_dir} in {base_time:.2f}s")
             
             except PermissionError as e:
                 logger.error(f"Permission error accessing {base_dir}: {str(e)}")
-                continue
             except RuntimeError as e:
                 # Re-raise RuntimeError (depth limit exceeded)
                 raise
             except Exception as e:
                 # Log other errors but continue
                 logger.error(f"Error accessing {base_dir}: {str(e)}")
-                continue
         
-        # If we found matches in app data directories, return them
-        if exact_matches or potential_matches:
+        def check_potential_matches() -> None:
+            """Check stored directories for potential matches"""
+            app_name_is_long_enough = len(app_name_lower) > 6
+            for dir_name, paths in potential_dirs.items():
+                for path in paths:
+                    # Check for potential matches using multiple criteria
+                    is_potential_match = False
+                    
+                    # 1. Check if directory name matches log patterns
+                    if any(re.search(pattern, dir_name, re.IGNORECASE) for pattern in DirectoryFinder.LOG_PATTERNS):
+                        # Only add as potential match if the app name is in the path
+                        if app_name_lower in path.lower():
+                            is_potential_match = True
+                    
+                    # 2. For longer strings, also check if they're similar using Utils.is_similar_strings
+                    if app_name_is_long_enough and len(dir_name) > 6:
+                        if Utils.is_similar_strings(dir_name, app_name_lower):
+                            is_potential_match = True
+                    
+                    if is_potential_match:
+                        logger.info(f"Found potential match: {path}")
+                        potential_matches.add(path)
+        
+        # First, check custom directories for exact matches only
+        custom_dirs = DirectoryFinder.get_custom_directories()
+        if custom_dirs:
+            logger.debug(f"Checking custom directories: {', '.join(custom_dirs)}")
+            for custom_dir in custom_dirs:
+                search_directory(custom_dir, check_exact_only=True)
+        
+        # If we found exact matches in custom directories, return them
+        if exact_matches:
             total_time = time.time() - start_time
-            logger.info(f"Found matches in app data directories: {len(exact_matches)} exact, {len(potential_matches)} potential")
+            logger.info(f"Found exact matches in custom directories: {len(exact_matches)}")
+            logger.debug(f"Search completed in {total_time:.2f}s (checked {dirs_checked} dirs)")
+            return {
+                'exact_matches': sorted(list(exact_matches)),
+                'potential_matches': []
+            }
+        
+        # If no exact matches in custom directories, search in app data directories
+        app_data_dirs = DirectoryFinder.get_app_data_directories()
+        logger.debug(f"Searching in app data directories: {', '.join(app_data_dirs)}")
+        
+        for base_dir in app_data_dirs:
+            search_directory(base_dir, check_exact_only=True)
+        
+        # If we found exact matches in app data directories, return them
+        if exact_matches:
+            total_time = time.time() - start_time
+            logger.info(f"Found exact matches in app data directories: {len(exact_matches)}")
             logger.debug(f"Search completed in {total_time:.2f}s (checked {dirs_checked} dirs, skipped {dirs_skipped} dirs)")
             return {
                 'exact_matches': sorted(list(exact_matches)),
-                'potential_matches': sorted(list(potential_matches))
+                'potential_matches': []
             }
         
-        # If no matches found in app data, search in Program Files (Windows only)
+        # If no exact matches found in app data, search in Program Files (Windows only)
         if platform.system() == 'Windows':
-            logger.debug("No matches in app data, searching Program Files")
+            logger.debug("No exact matches in app data, searching Program Files")
             program_files_dirs = [
                 os.path.expandvars('%ProgramFiles%'),
                 os.path.expandvars('%ProgramFiles(x86)%')
             ]
             
             for base_dir in program_files_dirs:
-                if not os.path.exists(base_dir):
-                    continue
-                
-                try:
-                    logger.debug(f"Starting search in: {base_dir}")
-                    base_start_time = time.time()
-                    last_log_time = time.time()
-                    
-                    # Walk through the directory tree with depth limit
-                    for root, dirs, files in os.walk(base_dir):
-                        current_time = time.time()
-                        
-                        # Log progress every 2 seconds
-                        if current_time - last_log_time >= 2:
-                            logger.debug(f"Still searching... Currently in: {root}")
-                            last_log_time = current_time
-                        
-                        # Filter out directories that should be skipped BEFORE os.walk continues
-                        dirs[:] = [d for d in dirs if not should_skip_dir(os.path.join(root, d), base_dir)]
-                        
-                        # Check if this directory contains log files
-                        has_log_files = False
-                        for file in files:
-                            if any(file.lower().endswith(ext) for ext in DirectoryFinder.LOG_EXTENSIONS):
-                                has_log_files = True
-                                break
-                        
-                        if not has_log_files:
-                            continue
-                        
-                        # Check directory name against patterns
-                        dir_name = os.path.basename(root).lower()
-                        
-                        # Check for exact matches
-                        if app_name_lower in dir_name:
-                            logger.info(f"Found exact match: {root}")
-                            exact_matches.add(root)
-                            continue
-                        
-                        # Check for potential matches
-                        if any(re.search(pattern, dir_name, re.IGNORECASE) for pattern in DirectoryFinder.LOG_PATTERNS):
-                            # Only add as potential match if the app name is in the path
-                            if app_name_lower in root.lower():
-                                logger.info(f"Found potential match: {root}")
-                                potential_matches.add(root)
-                    
-                    base_time = time.time() - base_start_time
-                    logger.debug(f"Completed search in {base_dir} in {base_time:.2f}s")
-                
-                except PermissionError as e:
-                    logger.error(f"Permission error accessing {base_dir}: {str(e)}")
-                    continue
-                except RuntimeError as e:
-                    # Re-raise RuntimeError (depth limit exceeded)
-                    raise
-                except Exception as e:
-                    # Log other errors but continue
-                    logger.error(f"Error accessing {base_dir}: {str(e)}")
-                    continue
+                if os.path.exists(base_dir):
+                    search_directory(base_dir, check_exact_only=True)
+        
+        # If we found exact matches in Program Files, return them
+        if exact_matches:
+            total_time = time.time() - start_time
+            logger.info(f"Found exact matches in Program Files: {len(exact_matches)}")
+            logger.debug(f"Search completed in {total_time:.2f}s (checked {dirs_checked} dirs, skipped {dirs_skipped} dirs)")
+            return {
+                'exact_matches': sorted(list(exact_matches)),
+                'potential_matches': []
+            }
+        
+        # If no exact matches found anywhere, check for potential matches
+        check_potential_matches()
         
         total_time = time.time() - start_time
         logger.info(f"Search complete. Found {len(exact_matches)} exact matches and {len(potential_matches)} potential matches")
