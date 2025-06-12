@@ -167,7 +167,7 @@ class ThemeManager:
                 font-size: 12px;
             }}
             
-            #nameEdit, #descriptionEdit {{
+            QLineEdit, QTextEdit {{
                 background-color: {dialog["input"]["background"]};
                 color: {dialog["input"]["color"]};
                 border: 1px solid {dialog["input"]["border"]};
@@ -175,8 +175,12 @@ class ThemeManager:
                 padding: 4px 8px;
             }}
             
-            #nameEdit:focus, #descriptionEdit:focus {{
+            QLineEdit:focus, QTextEdit:focus {{
                 border: 1px solid {dialog["input"]["focus_border"]};
+            }}
+            
+            QLineEdit::placeholder, QTextEdit::placeholder {{
+                color: #808080;
             }}
             
             #createButton, #cancelButton {{

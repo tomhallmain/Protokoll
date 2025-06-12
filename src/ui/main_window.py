@@ -8,7 +8,10 @@ import os
 from ..internal.tracker import Tracker
 from ..utils.config_manager import ConfigManager
 from ..utils.theme_manager import ThemeManager
+from ..utils.logging_manager import LoggingManager
 from .tracker_dialog import TrackerDialog
+
+logger = LoggingManager.get_logger('ui.main_window')
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -76,14 +79,8 @@ class MainWindow(QMainWindow):
         self.log_viewer.setReadOnly(True)
         self.setup_log_viewer()
         
-        # Add log file button
-        add_log_btn = QPushButton("Add Log File")
-        add_log_btn.setObjectName("addLogButton")
-        add_log_btn.clicked.connect(self.add_log_file)
-        
         right_layout.addLayout(search_layout)
         right_layout.addWidget(self.log_viewer)
-        right_layout.addWidget(add_log_btn)
         
         # Add panels to main layout
         layout.addWidget(left_panel, 1)
@@ -216,6 +213,9 @@ class MainWindow(QMainWindow):
                 for directory in data["log_directories"]:
                     tracker.add_log_directory(directory)
                 
+                # Save initial state
+                tracker.save_metadata()
+                
                 self.config_manager.add_recent_tracker(data["name"])
                 self.load_trackers()
                 
@@ -254,25 +254,6 @@ class MainWindow(QMainWindow):
                     self.log_viewer.append("\n")
             except Exception as e:
                 self.log_viewer.append(f'<span style="color: #f14c4c;">Error reading {log_file["path"]}: {str(e)}</span>\n')
-    
-    def add_log_file(self):
-        """Add a log file to the current tracker"""
-        if not self.current_tracker:
-            QMessageBox.warning(self, "Error", "Please select a tracker first")
-            return
-        
-        file_path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select Log File",
-            "",
-            "Log Files (*.log *.txt);;All Files (*.*)"
-        )
-        
-        if file_path:
-            if self.current_tracker.add_log_file(file_path):
-                self.update_log_viewer()
-            else:
-                QMessageBox.warning(self, "Error", "Failed to add log file")
     
     def search_logs(self):
         """Search through the current tracker's logs"""
@@ -323,13 +304,18 @@ class MainWindow(QMainWindow):
                 current_dirs = set(tracker.get_log_directories())
                 new_dirs = set(data["log_directories"])
                 
-                # Remove directories that are no longer tracked
+                logger.debug(f"Directories to remove: {current_dirs - new_dirs}")
+                logger.debug(f"Directories to add: {new_dirs - current_dirs}")
+                
+                # Remove directories that are no longer present
                 for directory in current_dirs - new_dirs:
                     tracker.remove_log_directory(directory)
                 
                 # Add new directories
                 for directory in new_dirs - current_dirs:
                     tracker.add_log_directory(directory)
+                
+                logger.debug(f"Final directories after update: {tracker.get_log_directories()}")
                 
                 # Save changes
                 tracker.save_metadata()
@@ -343,6 +329,7 @@ class MainWindow(QMainWindow):
                     self.tracker_list.setCurrentItem(items[0])
                     
             except Exception as e:
+                logger.error(f"Error updating tracker: {str(e)}")
                 QMessageBox.critical(self, "Error", f"Failed to update tracker: {str(e)}")
     
     def closeEvent(self, event):

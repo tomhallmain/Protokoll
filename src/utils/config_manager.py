@@ -3,6 +3,10 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from ..utils.logging_manager import LoggingManager
+
+logger = LoggingManager.get_logger('utils.config_manager')
+
 class ConfigManager:
     def __init__(self):
         self.app_name = "Protokoll"
@@ -43,7 +47,7 @@ class ConfigManager:
                     # Merge with default config to ensure all keys exist
                     return {**self.default_config, **config}
             except Exception as e:
-                print(f"Error loading config: {e}")
+                logger.error(f"Error loading config: {e}")
                 return self.default_config.copy()
         return self.default_config.copy()
     
@@ -53,7 +57,7 @@ class ConfigManager:
             with open(self.config_file, 'w', encoding='utf-8') as f:
                 json.dump(self.config, f, indent=4)
         except Exception as e:
-            print(f"Error saving config: {e}")
+            logger.error(f"Error saving config: {e}")
     
     def get(self, key: str, default: Any = None) -> Any:
         """Get configuration value"""
@@ -97,7 +101,7 @@ class ConfigManager:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f)
         except Exception as e:
-            print(f"Error saving cache {name}: {e}")
+            logger.error(f"Error saving cache {name}: {e}")
     
     def load_cache(self, name: str, default: Any = None) -> Any:
         """Load data from cache"""
@@ -107,5 +111,5 @@ class ConfigManager:
                 with open(cache_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
             except Exception as e:
-                print(f"Error loading cache {name}: {e}")
+                logger.error(f"Error loading cache {name}: {e}")
         return default 
