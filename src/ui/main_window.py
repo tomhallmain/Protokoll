@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                             QPushButton, QLabel, QLineEdit, QTextEdit,
-                            QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QCheckBox)
+                            QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QCheckBox, QFrame)
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont, QPalette, QColor, QFontMetrics
 import os
@@ -36,44 +36,51 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
         layout.setContentsMargins(10, 10, 10, 10)
         
-        # Left panel for tracker management
+        # Left panel for tracker management and file list
         left_panel = QWidget()
         left_panel.setObjectName("leftPanel")
-        left_panel.setMaximumWidth(250)  # Limit the width of the left panel
+        left_panel.setMaximumWidth(300)
         left_layout = QVBoxLayout(left_panel)
         left_layout.setSpacing(8)
         
-        # Tracker list
+        # Create New Tracker button at the top
+        create_btn = QPushButton("Create New Tracker")
+        create_btn.setObjectName("createButton")
+        create_btn.clicked.connect(self.create_tracker)
+        left_layout.addWidget(create_btn)
+        
+        # Tracker section
+        tracker_label = QLabel("Trackers")
+        tracker_label.setObjectName("sectionHeader")
+        left_layout.addWidget(tracker_label)
+        
         self.tracker_list = QListWidget()
         self.tracker_list.setObjectName("trackerList")
         self.tracker_list.currentItemChanged.connect(self.on_tracker_selected)
         self.tracker_list.itemDoubleClicked.connect(self.edit_tracker)
-        
-        # Buttons for tracker management
-        create_btn = QPushButton("Create New Tracker")
-        create_btn.setObjectName("createButton")
-        create_btn.clicked.connect(self.create_tracker)
-        
-        left_layout.addWidget(QLabel("Trackers"))
         left_layout.addWidget(self.tracker_list)
-        left_layout.addWidget(create_btn)
+        
+        # Add a separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        left_layout.addWidget(separator)
+        
+        # Log files section
+        files_label = QLabel("Log Files")
+        files_label.setObjectName("sectionHeader")
+        left_layout.addWidget(files_label)
+        
+        self.files_list = QListWidget()
+        self.files_list.setObjectName("filesList")
+        self.files_list.itemSelectionChanged.connect(self.on_log_file_selected)
+        left_layout.addWidget(self.files_list)
         
         # Right panel for log viewing
         right_panel = QWidget()
         right_panel.setObjectName("rightPanel")
         right_layout = QVBoxLayout(right_panel)
         right_layout.setSpacing(8)
-        
-        # Log files section
-        files_label = QLabel("Log Files:")
-        files_label.setObjectName("sectionHeader")
-        right_layout.addWidget(files_label)
-        
-        self.files_list = QListWidget()
-        self.files_list.setObjectName("filesList")
-        self.files_list.setMaximumHeight(150)
-        self.files_list.itemSelectionChanged.connect(self.on_log_file_selected)
-        right_layout.addWidget(self.files_list)
         
         # Search bar
         search_layout = QHBoxLayout()
@@ -84,13 +91,12 @@ class MainWindow(QMainWindow):
         search_btn = QPushButton("Search")
         search_btn.setObjectName("searchButton")
         search_btn.clicked.connect(self.search_logs)
-        search_layout.addWidget(self.search_edit)
-        search_layout.addWidget(search_btn)
-        
-        # Add line numbers checkbox
         self.show_line_numbers = QCheckBox("Show line numbers")
         self.show_line_numbers.setObjectName("showLineNumbers")
-        self.show_line_numbers.setChecked(True)  # Default to showing line numbers
+        self.show_line_numbers.setChecked(True)
+        
+        search_layout.addWidget(self.search_edit)
+        search_layout.addWidget(search_btn)
         search_layout.addWidget(self.show_line_numbers)
         
         # Log viewer
@@ -207,6 +213,18 @@ class MainWindow(QMainWindow):
         self.config_manager.set('last_tracker', tracker_name)
         self.update_log_files_list()
     
+    def on_log_file_selected(self):
+        """Handle log file selection"""
+        selected_items = self.files_list.selectedItems()
+        if not selected_items:
+            return
+        log_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+        # Save last selected log file for this tracker
+        if self.current_tracker:
+            tracker_key = f"last_log_file_{self.current_tracker.name}"
+            self.config_manager.set(tracker_key, log_file_path)
+        self.display_log_file(log_file_path)
+    
     def update_log_files_list(self):
         """Update the list of log files for the current tracker"""
         self.files_list.clear()
@@ -217,32 +235,32 @@ class MainWindow(QMainWindow):
         log_files = self.current_tracker.get_log_files()
         logger.debug(f"Found {len(log_files)} log files")
         
-        for log_file in log_files:
+        last_selected = self.config_manager.get(f"last_log_file_{self.current_tracker.name}")
+        selected_row = None
+        for idx, log_file in enumerate(log_files):
             logger.debug(f"Adding log file to list: {log_file['path']}")
             item = QListWidgetItem(os.path.basename(log_file["path"]))
             item.setData(Qt.ItemDataRole.UserRole, log_file["path"])
             self.files_list.addItem(item)
-        
+            if last_selected and log_file["path"] == last_selected:
+                selected_row = idx
         logger.debug(f"File list now contains {self.files_list.count()} items")
+        # Pre-select the last selected log file if available
+        if selected_row is not None:
+            self.files_list.setCurrentRow(selected_row)
     
-    def on_log_file_selected(self):
-        """Handle log file selection"""
+    def display_log_file(self, file_path):
+        """Display the selected log file"""
         self.log_viewer.clear()
-        selected_items = self.files_list.selectedItems()
-        if not selected_items:
-            return
-        
-        for item in selected_items:
-            file_path = item.data(Qt.ItemDataRole.UserRole)
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                    self.log_viewer.append(f'<span style="color: #569cd6;">=== {os.path.basename(file_path)} ===</span>\n')
-                    self.log_viewer.append(content)
-                    self.log_viewer.append("\n")
-            except Exception as e:
-                logger.error(f"Error reading file {file_path}: {str(e)}")
-                self.log_viewer.append(f'<span style="color: #f14c4c;">Error reading {file_path}: {str(e)}</span>\n')
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                self.log_viewer.append(f'<span style="color: #569cd6;">=== {os.path.basename(file_path)} ===</span>\n')
+                self.log_viewer.append(content)
+                self.log_viewer.append("\n")
+        except Exception as e:
+            logger.error(f"Error reading file {file_path}: {str(e)}")
+            self.log_viewer.append(f'<span style="color: #f14c4c;">Error reading {file_path}: {str(e)}</span>\n')
     
     def search_logs(self):
         """Search through the current log file"""
