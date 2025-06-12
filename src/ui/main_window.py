@@ -1,10 +1,12 @@
+from datetime import datetime
+import os
+import re
+
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                             QPushButton, QLabel, QLineEdit, QTextEdit,
                             QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QCheckBox, QFrame)
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont, QPalette, QColor, QFontMetrics
-import os
-import re
 
 from ..internal.tracker import Tracker
 from ..utils.config_manager import ConfigManager
@@ -212,7 +214,7 @@ class MainWindow(QMainWindow):
             logger.debug(f"Tracker loaded with directories: {self.current_tracker.get_log_directories()}")
         self.config_manager.set('last_tracker', tracker_name)
         self.update_log_files_list()
-
+    
     def update_log_files_list(self):
         """Update the list of log files for the current tracker"""
         self.files_list.clear()
@@ -258,8 +260,14 @@ class MainWindow(QMainWindow):
             title += f" - {self.current_tracker.name}"
             selected_items = self.files_list.selectedItems()
             if selected_items:
-                log_file = os.path.basename(selected_items[0].data(Qt.ItemDataRole.UserRole))
-                title += f" - {log_file}"
+                log_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+                log_file = os.path.basename(log_file_path)
+                try:
+                    last_modified = os.path.getmtime(log_file_path)
+                    last_modified_str = datetime.fromtimestamp(last_modified).strftime('%Y-%m-%d %H:%M:%S')
+                    title += f" - {log_file} (Last modified: {last_modified_str})"
+                except Exception:
+                    title += f" - {log_file}"
         self.setWindowTitle(title)
     
     def on_log_file_selected(self):

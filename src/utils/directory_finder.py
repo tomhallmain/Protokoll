@@ -195,7 +195,8 @@ class DirectoryFinder:
             app_data_dirs.extend([
                 os.path.expandvars('%LOCALAPPDATA%'),
                 os.path.expandvars('%APPDATA%'),
-                os.path.expandvars('%PROGRAMDATA%')
+                os.path.expandvars('%PROGRAMDATA%'),
+                os.path.join(os.path.expandvars('%USERPROFILE%'), 'AppData', 'LocalLow')
             ])
         elif platform.system() == 'Darwin':  # macOS
             app_data_dirs.extend([
