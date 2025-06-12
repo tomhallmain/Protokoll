@@ -1,9 +1,10 @@
+import json
 import os
 import re
 import platform
 import time
-import json
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Tuple
+
 from .logging_manager import LoggingManager
 from .utils import Utils
 

@@ -2,7 +2,6 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                             QPushButton, QListWidget, QListWidgetItem,
                             QProgressBar, QMessageBox)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
-import os
 
 from ..utils.theme_manager import ThemeManager
 from ..utils.directory_finder import DirectoryFinder

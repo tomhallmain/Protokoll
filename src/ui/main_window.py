@@ -250,6 +250,11 @@ class MainWindow(QMainWindow):
         # Pre-select the appropriate log file
         if selected_row is not None:
             self.files_list.setCurrentRow(selected_row)
+        else:
+            # No log files found, show message in log viewer
+            self.log_viewer.clear()
+            self.log_viewer.append('<span style="color: #cca700;">No log files found in the tracked directories.</span>')
+            self.log_viewer.append('<span style="color: #6a9955;">Add directories containing log files to this tracker.</span>')
         
         self.update_window_title()
     

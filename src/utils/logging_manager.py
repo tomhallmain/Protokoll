@@ -1,7 +1,5 @@
 import logging
 import sys
-from datetime import datetime
-from pathlib import Path
 
 class LoggingManager:
     """Manages application-wide logging configuration."""

@@ -1,9 +1,10 @@
+import logging
 import sys
+
 from PyQt6.QtWidgets import QApplication
 from .ui.main_window import MainWindow
 from .utils.logging_manager import LoggingManager
 from .utils.theme_manager import ThemeManager
-import logging
 
 def main():
     # Set up logging

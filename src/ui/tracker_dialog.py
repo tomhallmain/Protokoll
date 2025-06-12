@@ -1,8 +1,9 @@
+import os
+
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                             QPushButton, QLineEdit, QTextEdit, QListWidget,
                             QListWidgetItem, QFileDialog, QMessageBox)
 from PyQt6.QtCore import Qt
-import os
 
 from ..utils.theme_manager import ThemeManager
 from ..internal.tracker import Tracker
