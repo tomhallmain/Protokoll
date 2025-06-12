@@ -57,18 +57,26 @@ class Tracker:
     def get_log_files(self) -> List[Dict[str, Any]]:
         """Get all log files in the tracked directories"""
         log_files = []
+        logger.debug(f"Searching for log files in directories: {self.log_directories}")
+        
         for directory in self.log_directories:
             try:
-                for file in os.listdir(directory):
-                    if any(file.lower().endswith(ext) for ext in DirectoryFinder.LOG_EXTENSIONS):
-                        file_path = os.path.join(directory, file)
-                        if os.path.isfile(file_path):
-                            log_files.append({
-                                "path": file_path,
-                                "last_modified": os.path.getmtime(file_path)
-                            })
+                logger.debug(f"Scanning directory: {directory}")
+                for root, _, files in os.walk(directory):
+                    logger.debug(f"Scanning subdirectory: {root}")
+                    for file in files:
+                        if any(file.lower().endswith(ext) for ext in DirectoryFinder.LOG_EXTENSIONS):
+                            file_path = os.path.join(root, file)
+                            if os.path.isfile(file_path):
+                                logger.debug(f"Found log file: {file_path}")
+                                log_files.append({
+                                    "path": file_path,
+                                    "last_modified": os.path.getmtime(file_path)
+                                })
             except Exception as e:
                 logger.error(f"Error reading directory {directory}: {e}")
+        
+        logger.debug(f"Total log files found: {len(log_files)}")
         return log_files
     
     def get_log_directories(self) -> List[str]:

@@ -1,9 +1,10 @@
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                             QPushButton, QLabel, QLineEdit, QTextEdit,
-                            QListWidget, QFileDialog, QMessageBox)
+                            QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QCheckBox)
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QFont, QPalette, QColor
+from PyQt6.QtGui import QFont, QPalette, QColor, QFontMetrics
 import os
+import re
 
 from ..internal.tracker import Tracker
 from ..utils.config_manager import ConfigManager
@@ -38,6 +39,7 @@ class MainWindow(QMainWindow):
         # Left panel for tracker management
         left_panel = QWidget()
         left_panel.setObjectName("leftPanel")
+        left_panel.setMaximumWidth(250)  # Limit the width of the left panel
         left_layout = QVBoxLayout(left_panel)
         left_layout.setSpacing(8)
         
@@ -62,16 +64,34 @@ class MainWindow(QMainWindow):
         right_layout = QVBoxLayout(right_panel)
         right_layout.setSpacing(8)
         
+        # Log files section
+        files_label = QLabel("Log Files:")
+        files_label.setObjectName("sectionHeader")
+        right_layout.addWidget(files_label)
+        
+        self.files_list = QListWidget()
+        self.files_list.setObjectName("filesList")
+        self.files_list.setMaximumHeight(150)
+        self.files_list.itemSelectionChanged.connect(self.on_log_file_selected)
+        right_layout.addWidget(self.files_list)
+        
         # Search bar
         search_layout = QHBoxLayout()
         self.search_edit = QLineEdit()
         self.search_edit.setObjectName("searchEdit")
         self.search_edit.setPlaceholderText("Search in logs...")
+        self.search_edit.returnPressed.connect(self.search_logs)
         search_btn = QPushButton("Search")
         search_btn.setObjectName("searchButton")
         search_btn.clicked.connect(self.search_logs)
         search_layout.addWidget(self.search_edit)
         search_layout.addWidget(search_btn)
+        
+        # Add line numbers checkbox
+        self.show_line_numbers = QCheckBox("Show line numbers")
+        self.show_line_numbers.setObjectName("showLineNumbers")
+        self.show_line_numbers.setChecked(True)  # Default to showing line numbers
+        search_layout.addWidget(self.show_line_numbers)
         
         # Log viewer
         self.log_viewer = QTextEdit()
@@ -82,88 +102,32 @@ class MainWindow(QMainWindow):
         right_layout.addLayout(search_layout)
         right_layout.addWidget(self.log_viewer)
         
-        # Add panels to main layout
-        layout.addWidget(left_panel, 1)
-        layout.addWidget(right_panel, 2)
+        # Add panels to main layout with adjusted proportions
+        layout.addWidget(left_panel, 1)  # Left panel gets 1 part
+        layout.addWidget(right_panel, 3)  # Right panel gets 3 parts
         
         # Apply custom styles
-        self.setStyleSheet("""
-            QWidget {
-                font-family: 'Segoe UI', Arial, sans-serif;
-            }
-            
-            QLabel {
-                color: #d4d4d4;
-                font-size: 12px;
-            }
-            
-            QPushButton {
-                background-color: #3c3c3c;
-                color: #d4d4d4;
-                border: 1px solid #4c4c4c;
-                border-radius: 4px;
-                padding: 6px 12px;
-                min-height: 24px;
-            }
-            
-            QPushButton:hover {
-                background-color: #4c4c4c;
-            }
-            
-            QPushButton:pressed {
-                background-color: #2c2c2c;
-            }
-            
-            QLineEdit {
-                background-color: #252526;
-                color: #d4d4d4;
-                border: 1px solid #3c3c3c;
-                border-radius: 4px;
-                padding: 4px 8px;
-                min-height: 24px;
-            }
-            
-            QListWidget {
-                background-color: #252526;
-                color: #d4d4d4;
-                border: 1px solid #3c3c3c;
-                border-radius: 4px;
-                padding: 4px;
-            }
-            
-            QListWidget::item {
-                padding: 4px 8px;
-                border-radius: 2px;
-            }
-            
-            QListWidget::item:selected {
-                background-color: #264f78;
-            }
-            
-            QListWidget::item:hover {
-                background-color: #2d2d2d;
-            }
-            
-            #leftPanel, #rightPanel {
-                background-color: #1e1e1e;
-                border-radius: 6px;
-                padding: 8px;
-            }
-        """)
+        self.setStyleSheet(ThemeManager.get_dialog_style())
     
     def setup_log_viewer(self):
-        """Set up the log viewer with configured font and settings"""
-        font = QFont(
-            self.config_manager.get('log_viewer.font_family', 'Consolas'),
-            self.config_manager.get('log_viewer.font_size', 12)
-        )
+        """Set up the log viewer with monospace font and line numbers"""
+        # Use a smaller monospace font
+        font = QFont("Consolas", 9)  # Reduced from 10 to 9
         self.log_viewer.setFont(font)
-        self.log_viewer.setLineWrapMode(
-            QTextEdit.LineWrapMode.WidgetWidth if 
-            self.config_manager.get('log_viewer.line_wrap', True)
-            else QTextEdit.LineWrapMode.NoWrap
-        )
-        self.log_viewer.setStyleSheet(ThemeManager.get_log_viewer_style())
+        
+        # Set tab width to 4 spaces
+        metrics = QFontMetrics(font)
+        tab_width = metrics.horizontalAdvance("    ")  # 4 spaces
+        self.log_viewer.setTabStopDistance(tab_width)
+        
+        # Enable line wrapping
+        self.log_viewer.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        
+        # Set background and text colors
+        palette = self.log_viewer.palette()
+        palette.setColor(QPalette.ColorRole.Base, QColor("#1e1e1e"))  # Dark background
+        palette.setColor(QPalette.ColorRole.Text, QColor("#d4d4d4"))  # Light text
+        self.log_viewer.setPalette(palette)
     
     def load_window_state(self):
         """Load window state from configuration"""
@@ -231,55 +195,99 @@ class MainWindow(QMainWindow):
         """Handle tracker selection"""
         if current is None:
             self.current_tracker = None
+            self.files_list.clear()
             self.log_viewer.clear()
             return
         
         tracker_name = current.text()
+        logger.debug(f"Loading tracker: {tracker_name}")
         self.current_tracker = Tracker.load(tracker_name, self.config_manager)
+        if self.current_tracker:
+            logger.debug(f"Tracker loaded with directories: {self.current_tracker.get_log_directories()}")
         self.config_manager.set('last_tracker', tracker_name)
-        self.update_log_viewer()
+        self.update_log_files_list()
     
-    def update_log_viewer(self):
-        """Update the log viewer with current tracker's logs"""
-        self.log_viewer.clear()
+    def update_log_files_list(self):
+        """Update the list of log files for the current tracker"""
+        self.files_list.clear()
         if not self.current_tracker:
+            logger.debug("No current tracker, clearing file list")
             return
         
-        for log_file in self.current_tracker.get_log_files():
+        log_files = self.current_tracker.get_log_files()
+        logger.debug(f"Found {len(log_files)} log files")
+        
+        for log_file in log_files:
+            logger.debug(f"Adding log file to list: {log_file['path']}")
+            item = QListWidgetItem(os.path.basename(log_file["path"]))
+            item.setData(Qt.ItemDataRole.UserRole, log_file["path"])
+            self.files_list.addItem(item)
+        
+        logger.debug(f"File list now contains {self.files_list.count()} items")
+    
+    def on_log_file_selected(self):
+        """Handle log file selection"""
+        self.log_viewer.clear()
+        selected_items = self.files_list.selectedItems()
+        if not selected_items:
+            return
+        
+        for item in selected_items:
+            file_path = item.data(Qt.ItemDataRole.UserRole)
             try:
-                with open(log_file["path"], "r", encoding="utf-8") as f:
+                with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
-                    self.log_viewer.append(f'<span style="color: #569cd6;">=== {os.path.basename(log_file["path"])} ===</span>\n')
+                    self.log_viewer.append(f'<span style="color: #569cd6;">=== {os.path.basename(file_path)} ===</span>\n')
                     self.log_viewer.append(content)
                     self.log_viewer.append("\n")
             except Exception as e:
-                self.log_viewer.append(f'<span style="color: #f14c4c;">Error reading {log_file["path"]}: {str(e)}</span>\n')
+                logger.error(f"Error reading file {file_path}: {str(e)}")
+                self.log_viewer.append(f'<span style="color: #f14c4c;">Error reading {file_path}: {str(e)}</span>\n')
     
     def search_logs(self):
-        """Search through the current tracker's logs"""
+        """Search through the current log file"""
         if not self.current_tracker:
-            QMessageBox.warning(self, "Error", "Please select a tracker first")
             return
         
-        query = self.search_edit.text().strip()
-        if not query:
-            self.update_log_viewer()
+        search_text = self.search_edit.text().strip()
+        if not search_text:
             return
         
-        results = self.current_tracker.search_logs(query)
-        self.log_viewer.clear()
-        
-        if not results:
-            self.log_viewer.append('<span style="color: #cca700;">No matches found</span>')
+        # Get the currently selected log file
+        selected_items = self.files_list.selectedItems()
+        if not selected_items:
             return
         
-        for result in results:
-            self.log_viewer.append(
-                f'<span style="color: #569cd6;">File: {os.path.basename(result["file"])}</span>\n'
-                f'<span style="color: #6a9955;">Line: {result["line"]}</span>\n'
-                f'<span style="color: #d4d4d4;">Content: {result["content"]}</span>\n'
-                f'<span style="color: #3c3c3c;">{"-" * 50}</span>\n'
-            )
+        log_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+        if not os.path.exists(log_file_path):
+            return
+        
+        try:
+            with open(log_file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            
+            matches = []
+            for i, line in enumerate(lines, 1):
+                if search_text.lower() in line.lower():
+                    # Strip ANSI color codes and format the line
+                    clean_line = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', line).strip()
+                    if self.show_line_numbers.isChecked():
+                        matches.append(f"{i}: {clean_line}")
+                    else:
+                        matches.append(clean_line)
+            
+            if matches:
+                # Show results in the log viewer
+                self.log_viewer.clear()
+                self.log_viewer.append(f"File: {os.path.basename(log_file_path)} Found {len(matches)} matches\n")
+                self.log_viewer.append("\n".join(matches))
+            else:
+                self.log_viewer.clear()
+                self.log_viewer.append(f"No matches found for '{search_text}'")
+                
+        except Exception as e:
+            self.log_viewer.clear()
+            self.log_viewer.append(f"Error reading log file: {str(e)}")
     
     def edit_tracker(self, item):
         """Edit the selected tracker"""
