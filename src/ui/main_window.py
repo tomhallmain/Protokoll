@@ -212,6 +212,55 @@ class MainWindow(QMainWindow):
             logger.debug(f"Tracker loaded with directories: {self.current_tracker.get_log_directories()}")
         self.config_manager.set('last_tracker', tracker_name)
         self.update_log_files_list()
+
+    def update_log_files_list(self):
+        """Update the list of log files for the current tracker"""
+        self.files_list.clear()
+        if not self.current_tracker:
+            logger.debug("No current tracker, clearing file list")
+            self.update_window_title()
+            return
+        
+        log_files = self.current_tracker.get_log_files()
+        logger.debug(f"Found {len(log_files)} log files")
+        
+        # Sort log files by last modified time, most recent first
+        log_files.sort(key=lambda x: x["last_modified"], reverse=True)
+        
+        last_selected = self.config_manager.get(f"last_log_file_{self.current_tracker.name}")
+        selected_row = None
+        for idx, log_file in enumerate(log_files):
+            logger.debug(f"Adding log file to list: {log_file['path']}")
+            item = QListWidgetItem(os.path.basename(log_file["path"]))
+            item.setData(Qt.ItemDataRole.UserRole, log_file["path"])
+            self.files_list.addItem(item)
+            if last_selected and log_file["path"] == last_selected:
+                selected_row = idx
+        
+        logger.debug(f"File list now contains {self.files_list.count()} items")
+        
+        # If we have log files but no previously selected file, select the most recent one
+        if selected_row is None and log_files:
+            selected_row = 0
+            # Save this as the last selected file
+            self.config_manager.set(f"last_log_file_{self.current_tracker.name}", log_files[0]["path"])
+        
+        # Pre-select the appropriate log file
+        if selected_row is not None:
+            self.files_list.setCurrentRow(selected_row)
+        
+        self.update_window_title()
+    
+    def update_window_title(self):
+        """Update the window title to show current context"""
+        title = "Protokoll"
+        if self.current_tracker:
+            title += f" - {self.current_tracker.name}"
+            selected_items = self.files_list.selectedItems()
+            if selected_items:
+                log_file = os.path.basename(selected_items[0].data(Qt.ItemDataRole.UserRole))
+                title += f" - {log_file}"
+        self.setWindowTitle(title)
     
     def on_log_file_selected(self):
         """Handle log file selection"""
@@ -224,30 +273,7 @@ class MainWindow(QMainWindow):
             tracker_key = f"last_log_file_{self.current_tracker.name}"
             self.config_manager.set(tracker_key, log_file_path)
         self.display_log_file(log_file_path)
-    
-    def update_log_files_list(self):
-        """Update the list of log files for the current tracker"""
-        self.files_list.clear()
-        if not self.current_tracker:
-            logger.debug("No current tracker, clearing file list")
-            return
-        
-        log_files = self.current_tracker.get_log_files()
-        logger.debug(f"Found {len(log_files)} log files")
-        
-        last_selected = self.config_manager.get(f"last_log_file_{self.current_tracker.name}")
-        selected_row = None
-        for idx, log_file in enumerate(log_files):
-            logger.debug(f"Adding log file to list: {log_file['path']}")
-            item = QListWidgetItem(os.path.basename(log_file["path"]))
-            item.setData(Qt.ItemDataRole.UserRole, log_file["path"])
-            self.files_list.addItem(item)
-            if last_selected and log_file["path"] == last_selected:
-                selected_row = idx
-        logger.debug(f"File list now contains {self.files_list.count()} items")
-        # Pre-select the last selected log file if available
-        if selected_row is not None:
-            self.files_list.setCurrentRow(selected_row)
+        self.update_window_title()
     
     def display_log_file(self, file_path):
         """Display the selected log file"""
