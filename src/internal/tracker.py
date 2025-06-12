@@ -4,8 +4,8 @@ import os
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Set
 
+from .log_directory_finder import LogDirectoryFinder
 from ..utils.config_manager import ConfigManager
-from ..utils.directory_finder import DirectoryFinder
 from ..utils.logging_manager import LoggingManager
 
 logger = LoggingManager.get_logger('internal.tracker')
@@ -65,7 +65,7 @@ class Tracker:
                 for root, _, files in os.walk(directory):
                     logger.debug(f"Scanning subdirectory: {root}")
                     for file in files:
-                        if any(file.lower().endswith(ext) for ext in DirectoryFinder.LOG_EXTENSIONS):
+                        if any(file.lower().endswith(ext) for ext in LogDirectoryFinder.LOG_EXTENSIONS):
                             file_path = os.path.join(root, file)
                             if os.path.isfile(file_path):
                                 logger.debug(f"Found log file: {file_path}")

@@ -5,12 +5,12 @@ import re
 import platform
 from typing import Dict, List, Tuple
 
-from .logging_manager import LoggingManager
-from .utils import Utils
+from ..utils.logging_manager import LoggingManager
+from ..utils.utils import Utils
 
-logger = LoggingManager.get_logger('utils.directory_finder')
+logger = LoggingManager.get_logger('internal.directory_finder')
 
-class DirectoryFinder:
+class LogDirectoryFinder:
     """Utility class for finding log directories based on application name."""
     
     # Maximum allowed depth (safety limit)
@@ -93,8 +93,8 @@ class DirectoryFinder:
     def _load_custom_directories() -> List[str]:
         """Load custom log directories from cache file."""
         try:
-            if os.path.exists(DirectoryFinder.CACHE_FILE):
-                with open(DirectoryFinder.CACHE_FILE, 'r') as f:
+            if os.path.exists(LogDirectoryFinder.CACHE_FILE):
+                with open(LogDirectoryFinder.CACHE_FILE, 'r') as f:
                     return json.load(f)
         except Exception as e:
             logger.error(f"Error loading custom directories: {str(e)}")
@@ -104,8 +104,8 @@ class DirectoryFinder:
     def _save_custom_directories(directories: List[str]) -> None:
         """Save custom log directories to cache file."""
         try:
-            os.makedirs(os.path.dirname(DirectoryFinder.CACHE_FILE), exist_ok=True)
-            with open(DirectoryFinder.CACHE_FILE, 'w') as f:
+            os.makedirs(os.path.dirname(LogDirectoryFinder.CACHE_FILE), exist_ok=True)
+            with open(LogDirectoryFinder.CACHE_FILE, 'w') as f:
                 json.dump(directories, f, indent=2)
         except Exception as e:
             logger.error(f"Error saving custom directories: {str(e)}")
@@ -129,7 +129,7 @@ class DirectoryFinder:
                 return False, f"Path is not a directory: {directory}"
             
             # Load existing directories
-            custom_dirs = DirectoryFinder._load_custom_directories()
+            custom_dirs = LogDirectoryFinder._load_custom_directories()
             
             # Check if directory is already in the list
             if directory in custom_dirs:
@@ -139,7 +139,7 @@ class DirectoryFinder:
             custom_dirs.append(directory)
             
             # Save updated list
-            DirectoryFinder._save_custom_directories(custom_dirs)
+            LogDirectoryFinder._save_custom_directories(custom_dirs)
             
             return True, f"Added custom directory: {directory}"
             
@@ -159,7 +159,7 @@ class DirectoryFinder:
         """
         try:
             # Load existing directories
-            custom_dirs = DirectoryFinder._load_custom_directories()
+            custom_dirs = LogDirectoryFinder._load_custom_directories()
             
             # Check if directory is in the list
             if directory not in custom_dirs:
@@ -169,7 +169,7 @@ class DirectoryFinder:
             custom_dirs.remove(directory)
             
             # Save updated list
-            DirectoryFinder._save_custom_directories(custom_dirs)
+            LogDirectoryFinder._save_custom_directories(custom_dirs)
             
             return True, f"Removed custom directory: {directory}"
             
@@ -184,7 +184,7 @@ class DirectoryFinder:
         Returns:
             List of custom directory paths
         """
-        return DirectoryFinder._load_custom_directories()
+        return LogDirectoryFinder._load_custom_directories()
     
     @staticmethod
     def get_app_data_directories() -> List[str]:
@@ -233,7 +233,7 @@ class DirectoryFinder:
         app_name_lower = app_name.lower()
         
         # Check if the app name matches any system directory
-        for skip_dir in DirectoryFinder.SKIP_DIRS:
+        for skip_dir in LogDirectoryFinder.SKIP_DIRS:
             if skip_dir.lower() in app_name_lower or app_name_lower in skip_dir.lower():
                 return False, f"Search term '{app_name}' matches system directory '{skip_dir}'. Please use manual directory selection."
         
@@ -242,10 +242,10 @@ class DirectoryFinder:
     @staticmethod
     def find_log_directories(app_name: str, max_depth: int = 3) -> Dict[str, List[str]]:
         """Refactored directory search with clear exact/potential match separation."""
-        max_depth = min(max_depth, DirectoryFinder.MAX_ALLOWED_DEPTH)
+        max_depth = min(max_depth, LogDirectoryFinder.MAX_ALLOWED_DEPTH)
         
         # Validate app name
-        is_valid, reason = DirectoryFinder.validate_search_query(app_name)
+        is_valid, reason = LogDirectoryFinder.validate_search_query(app_name)
         if not is_valid:
             logger.warning(f"Invalid search query: {reason}")
             return {'exact_matches': [], 'potential_matches': []}
@@ -258,8 +258,8 @@ class DirectoryFinder:
 
         # Define base directories to search
         base_dirs = (
-            DirectoryFinder.get_custom_directories() +
-            DirectoryFinder.get_app_data_directories()
+            LogDirectoryFinder.get_custom_directories() +
+            LogDirectoryFinder.get_app_data_directories()
         )
         if platform.system() == 'Windows':
             base_dirs.extend([
@@ -278,7 +278,7 @@ class DirectoryFinder:
                 new_dirs = []
                 for d in dirs:
                     full_path = os.path.join(root, d)
-                    if DirectoryFinder._should_skip(full_path, base_dir, max_depth):
+                    if LogDirectoryFinder._should_skip(full_path, base_dir, max_depth):
                         dirs_skipped += 1
                     else:
                         new_dirs.append(d)
@@ -290,7 +290,7 @@ class DirectoryFinder:
                 
                 # Check exact match
                 if dir_name == app_name_lower:
-                    if DirectoryFinder._has_log_files(root, max_depth):
+                    if LogDirectoryFinder._has_log_files(root, max_depth):
                         exact_matches.add(root)
                         logger.info(f"Found exact match: {root}")
         
@@ -313,7 +313,7 @@ class DirectoryFinder:
                 new_dirs = []
                 for d in dirs:
                     full_path = os.path.join(root, d)
-                    if DirectoryFinder._should_skip(full_path, base_dir, max_depth):
+                    if LogDirectoryFinder._should_skip(full_path, base_dir, max_depth):
                         dirs_skipped += 1
                     else:
                         new_dirs.append(d)
@@ -323,8 +323,8 @@ class DirectoryFinder:
                 dirs_checked += 1
                 
                 # Check potential candidate
-                if DirectoryFinder._is_potential_candidate(root, app_name_lower):
-                    if DirectoryFinder._has_log_files(root, max_depth):
+                if LogDirectoryFinder._is_potential_candidate(root, app_name_lower):
+                    if LogDirectoryFinder._has_log_files(root, max_depth):
                         potential_matches.add(root)
                         logger.info(f"Found potential match: {root}")
                     else:
@@ -353,7 +353,7 @@ class DirectoryFinder:
                 return True
                 
             # Skip special directories
-            if any(skip_dir in dir_path.split(os.sep) for skip_dir in DirectoryFinder.SKIP_DIRS):
+            if any(skip_dir in dir_path.split(os.sep) for skip_dir in LogDirectoryFinder.SKIP_DIRS):
                 return True
                 
             return False
@@ -371,7 +371,7 @@ class DirectoryFinder:
                 for entry in os.listdir(current_dir):
                     entry_path = os.path.join(current_dir, entry)
                     if os.path.isfile(entry_path):
-                        if any(entry.lower().endswith(ext) for ext in DirectoryFinder.LOG_EXTENSIONS):
+                        if any(entry.lower().endswith(ext) for ext in LogDirectoryFinder.LOG_EXTENSIONS):
                             return True
                     elif os.path.isdir(entry_path) and depth < max_depth:
                         queue.append((entry_path, depth + 1))
@@ -386,7 +386,7 @@ class DirectoryFinder:
         dir_path_lower = dir_path.lower()
         
         # Match log patterns and app name in path
-        if any(re.search(pattern, dir_name, re.IGNORECASE) for pattern in DirectoryFinder.LOG_PATTERNS):
+        if any(re.search(pattern, dir_name, re.IGNORECASE) for pattern in LogDirectoryFinder.LOG_PATTERNS):
             return app_name_lower in dir_path_lower
         
         # Check string similarity for longer names

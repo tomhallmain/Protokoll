@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                             QProgressBar, QMessageBox)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
+from ..internal.log_directory_finder import LogDirectoryFinder
 from ..utils.theme_manager import ThemeManager
-from ..utils.directory_finder import DirectoryFinder
 from ..utils.logging_manager import LoggingManager
 
 logger = LoggingManager.get_logger('ui.find_log_dirs_dialog')
@@ -26,13 +26,13 @@ class DirectorySearchThread(QThread):
             self.logger.info(f"Starting directory search for: {self.app_name}")
             
             # Validate search query
-            is_valid, reason = DirectoryFinder.validate_search_query(self.app_name)
+            is_valid, reason = LogDirectoryFinder.validate_search_query(self.app_name)
             if not is_valid:
                 self.logger.warning(f"Invalid search query: {reason}")
                 self.search_error.emit(reason)
                 return
             
-            results = DirectoryFinder.find_log_directories(self.app_name)
+            results = LogDirectoryFinder.find_log_directories(self.app_name)
             self.logger.info("Directory search completed")
             self.search_complete.emit(results)
         except Exception as e:
