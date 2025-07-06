@@ -127,7 +127,7 @@ class FileHandler:
                     info["warnings"].append("Binary detection failed")
                 
                 if info.get("is_binary", False):
-                    info["warnings"].append("Binary file detected")
+                    info["warnings"].append("File may contain corrupted data or non-text content")
             
             return info
             
@@ -190,7 +190,7 @@ class FileHandler:
         if file_info["size"] > max_size:
             return False, "", {"error": f"Size exceeds limit ({file_info['size_human']})"}
         if file_info.get("is_binary", False):
-            return False, "", {"error": "Binary file", "warnings": file_info["warnings"]}
+            return False, "", {"error": "File may contain corrupted data or non-text content", "warnings": file_info["warnings"]}
         
         try:
             # Handle compressed files
@@ -340,7 +340,7 @@ class FileHandler:
             return False, "File is not readable", file_info
         
         if file_info.get("is_binary", False):
-            return False, "Binary file detected", file_info
+            return False, "File may contain corrupted data or non-text content", file_info
         
         if file_info["size"] > self.MAX_FILE_SIZE:
             return False, f"File too large ({file_info['size_human']})", file_info
