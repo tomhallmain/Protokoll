@@ -1,2 +1,2 @@
-CALL TITLE RefacDir
+CALL TITLE Protokoll
 python %~dp0\run.py

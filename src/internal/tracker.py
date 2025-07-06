@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional, Set
 from .log_directory_finder import LogDirectoryFinder
 from ..utils.config_manager import ConfigManager
 from ..utils.logging_manager import LoggingManager
+from ..utils.file_handler import FileHandler
 
 logger = LoggingManager.get_logger('internal.tracker')
 
@@ -59,19 +60,29 @@ class Tracker:
         log_files = []
         logger.debug(f"Searching for log files in directories: {self.log_directories}")
         
+        file_handler = FileHandler()
+        
         for directory in self.log_directories:
             try:
                 logger.debug(f"Scanning directory: {directory}")
                 for root, _, files in os.walk(directory):
                     logger.debug(f"Scanning subdirectory: {root}")
                     for file in files:
-                        if any(file.lower().endswith(ext) for ext in LogDirectoryFinder.LOG_EXTENSIONS):
-                            file_path = os.path.join(root, file)
-                            if os.path.isfile(file_path):
+                        file_path = os.path.join(root, file)
+                        
+                        # Use FileHandler to validate the file
+                        if FileHandler.is_log_file(file_path):
+                            file_info = file_handler.get_file_info(file_path)
+                            
+                            if "error" not in file_info and file_info["is_file"]:
                                 logger.debug(f"Found log file: {file_path}")
                                 log_files.append({
                                     "path": file_path,
-                                    "last_modified": os.path.getmtime(file_path)
+                                    "last_modified": file_info["last_modified"],
+                                    "size": file_info["size"],
+                                    "size_human": file_info["size_human"],
+                                    "is_compressed": file_info["is_compressed"],
+                                    "warnings": file_info.get("warnings", [])
                                 })
             except Exception as e:
                 logger.error(f"Error reading directory {directory}: {e}")

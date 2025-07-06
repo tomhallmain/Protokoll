@@ -668,3 +668,62 @@ class Utils:
         # This is a placeholder and should be replaced with the actual implementation
         return True
 
+    @staticmethod
+    def open_file_with_editor(filepath, custom_command=None, error_callback=None):
+        """
+        Open a file with the system's default text editor or a custom command.
+        
+        Args:
+            filepath (str): Path to the file to open
+            custom_command (str, optional): Custom command to use instead of default editor.
+                                          Should contain {filepath} placeholder for the file path.
+                                          Example: "notepad.exe {filepath}" or "code {filepath}"
+            error_callback (callable, optional): Callback function to handle errors.
+                                               Called with error_message as argument if an error occurs.
+        
+        Returns:
+            bool: True if the command was successfully started (not necessarily completed), False if there was an immediate error
+        """
+        def run_editor():
+            try:
+                if custom_command:
+                    # Replace {filepath} placeholder with actual file path
+                    command = custom_command.replace("{filepath}", filepath)
+                    # Split command into executable and arguments
+                    cmd_parts = command.split()
+                    executable = cmd_parts[0]
+                    args = cmd_parts[1:] if len(cmd_parts) > 1 else []
+                    
+                    # Check if executable exists
+                    if not Utils.executable_available(executable):
+                        if error_callback:
+                            error_callback(error_message=f"Executable not found: {executable}")
+                        return
+                    
+                    # Run the custom command
+                    subprocess.run([executable] + args, check=True)
+                else:
+                    # Use system default text editor
+                    if sys.platform == 'win32':
+                        subprocess.run(["notepad.exe", filepath], check=True)
+                    elif sys.platform == 'darwin':
+                        subprocess.run(["open", "-t", filepath], check=True)
+                    else:
+                        subprocess.run(["xdg-open", filepath], check=True)
+                        
+            except subprocess.CalledProcessError as e:
+                if error_callback:
+                    error_callback(error_message=f"Failed to open file with editor: {str(e)}")
+            except FileNotFoundError as e:
+                if error_callback:
+                    error_callback(error_message=f"Editor not found: {str(e)}")
+            except Exception as e:
+                if error_callback:
+                    error_callback(error_message=f"Unexpected error opening file: {str(e)}")
+        
+        # Start the editor in a separate thread
+        thread = threading.Thread(target=run_editor, daemon=True)
+        thread.start()
+        
+        return True
+

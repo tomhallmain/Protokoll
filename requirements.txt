@@ -1,3 +1,4 @@
 PyQt6>=6.4.0
 appdirs>=1.4.4
-pathlib>=1.0.1 
+pathlib>=1.0.1
+chardet>=5.0.0

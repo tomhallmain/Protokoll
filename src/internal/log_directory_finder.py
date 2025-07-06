@@ -7,6 +7,7 @@ from typing import Dict, List, Tuple
 
 from ..utils.logging_manager import LoggingManager
 from ..utils.utils import Utils
+from ..utils.file_handler import FileHandler
 
 logger = LoggingManager.get_logger('internal.directory_finder')
 
@@ -31,19 +32,8 @@ class LogDirectoryFinder:
         r'tmp'
     ]
     
-    # Common log file extensions
-    LOG_EXTENSIONS = [
-        '.log',
-        '.txt',
-        '.csv',
-        '.json',
-        '.xml',
-        '.yaml',
-        '.yml',
-        '.ini',
-        '.conf',
-        '.cfg'
-    ]
+    # Common log file extensions (using FileHandler's extended list)
+    LOG_EXTENSIONS = FileHandler.LOG_EXTENSIONS
     
     # Directories to skip (system directories, etc.)
     SKIP_DIRS = {
