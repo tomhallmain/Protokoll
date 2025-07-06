@@ -253,8 +253,8 @@ class MainWindow(QMainWindow):
         else:
             # No log files found, show message in log viewer
             self.log_viewer.clear()
-            self.log_viewer.append('<span style="color: #cca700;">No log files found in the tracked directories.</span>')
-            self.log_viewer.append('<span style="color: #6a9955;">Add directories containing log files to this tracker.</span>')
+            self.append_styled_content("No log files found in the tracked directories.", color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
+            self.append_styled_content("Add directories containing log files to this tracker.", color=ThemeManager.DARK_THEME["log_viewer"]["success"])
         
         self.update_window_title()
     
@@ -288,6 +288,22 @@ class MainWindow(QMainWindow):
         self.display_log_file(log_file_path)
         self.update_window_title()
     
+    def append_styled_content(self, text, color=None, bold=False, background_color=None):
+        """Append content to the log viewer with optional styling"""
+        style_parts = []
+        if color:
+            style_parts.append(f"color: {color}")
+        if background_color:
+            style_parts.append(f"background-color: {background_color}")
+        if bold:
+            style_parts.append("font-weight: bold")
+        
+        if style_parts:
+            style = "; ".join(style_parts)
+            self.log_viewer.append(f'<span style="{style}">{text}</span>')
+        else:
+            self.log_viewer.append(text)
+
     def convert_ansi_to_html(self, text):
         """Convert ANSI color codes to HTML formatting"""
         # ANSI color code patterns
@@ -295,45 +311,9 @@ class MainWindow(QMainWindow):
         # Color codes: \x1b[38;2;r;g;bm (24-bit) or \x1b[38;5;nm (8-bit) or \x1b[38;nm (standard)
         # Background codes: \x1b[48;2;r;g;bm (24-bit) or \x1b[48;5;nm (8-bit) or \x1b[48;nm (standard)
         
-        # Standard ANSI color codes mapping
-        ansi_colors = {
-            30: "#000000",  # Black
-            31: "#cd3131",  # Red
-            32: "#0dbc79",  # Green
-            33: "#e5e510",  # Yellow
-            34: "#2472c8",  # Blue
-            35: "#bc3fbc",  # Magenta
-            36: "#11a8cd",  # Cyan
-            37: "#e5e5e5",  # White
-            90: "#666666",  # Bright Black
-            91: "#f14c4c",  # Bright Red
-            92: "#23d18b",  # Bright Green
-            93: "#f5f543",  # Bright Yellow
-            94: "#3b8eea",  # Bright Blue
-            95: "#d670d6",  # Bright Magenta
-            96: "#29b8db",  # Bright Cyan
-            97: "#ffffff",  # Bright White
-        }
-        
-        # Background colors (same as foreground but with different prefix)
-        ansi_bg_colors = {
-            40: "#000000",  # Black
-            41: "#cd3131",  # Red
-            42: "#0dbc79",  # Green
-            43: "#e5e510",  # Yellow
-            44: "#2472c8",  # Blue
-            45: "#bc3fbc",  # Magenta
-            46: "#11a8cd",  # Cyan
-            47: "#e5e5e5",  # White
-            100: "#666666", # Bright Black
-            101: "#f14c4c", # Bright Red
-            102: "#23d18b", # Bright Green
-            103: "#f5f543", # Bright Yellow
-            104: "#3b8eea", # Bright Blue
-            105: "#d670d6", # Bright Magenta
-            106: "#29b8db", # Bright Cyan
-            107: "#ffffff", # Bright White
-        }
+        # Use centralized color constants from theme manager
+        ansi_colors = ThemeManager.ANSI_COLORS
+        ansi_bg_colors = ThemeManager.ANSI_BG_COLORS
         
         # Split text into lines to process each line separately
         lines = text.split('\n')
@@ -414,7 +394,8 @@ class MainWindow(QMainWindow):
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
-                self.log_viewer.append(f'<span style="color: #569cd6;">=== {os.path.basename(file_path)} ===</span>\n')
+                self.append_styled_content(f"=== {os.path.basename(file_path)} ===", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+                self.log_viewer.append("\n")
                 
                 # Convert ANSI color codes to HTML formatting
                 formatted_content = self.convert_ansi_to_html(content)
@@ -422,7 +403,8 @@ class MainWindow(QMainWindow):
                 self.log_viewer.append("\n")
         except Exception as e:
             logger.error(f"Error reading file {file_path}: {str(e)}")
-            self.log_viewer.append(f'<span style="color: #f14c4c;">Error reading {file_path}: {str(e)}</span>\n')
+            self.append_styled_content(f"Error reading {file_path}: {str(e)}", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
+            self.log_viewer.append("\n")
     
     def search_logs(self):
         """Search through the current log file"""
@@ -452,22 +434,37 @@ class MainWindow(QMainWindow):
                     # Convert ANSI color codes to HTML formatting
                     formatted_line = self.convert_ansi_to_html(line.rstrip('\n'))
                     if self.show_line_numbers.isChecked():
-                        matches.append(f"<span style='color: #569cd6;'>{i}:</span> {formatted_line}")
+                        line_number = f"{i}: "
+                        matches.append(f"{line_number}{formatted_line}")
                     else:
                         matches.append(formatted_line)
             
             if matches:
                 # Show results in the log viewer
                 self.log_viewer.clear()
-                self.log_viewer.append(f"<span style='color: #569cd6;'>File: {os.path.basename(log_file_path)} Found {len(matches)} matches</span>\n")
-                self.log_viewer.append("\n".join(matches))
+                self.append_styled_content(f"File: {os.path.basename(log_file_path)} Found {len(matches)} matches", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+                self.log_viewer.append("\n")
+                
+                # Process matches to add line number styling
+                for match in matches:
+                    if self.show_line_numbers.isChecked() and ": " in match:
+                        # Split line number from content
+                        parts = match.split(": ", 1)
+                        if len(parts) == 2:
+                            line_num, content = parts
+                            self.append_styled_content(f"{line_num}: ", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+                            self.log_viewer.append(content)
+                        else:
+                            self.log_viewer.append(match)
+                    else:
+                        self.log_viewer.append(match)
             else:
                 self.log_viewer.clear()
-                self.log_viewer.append(f"<span style='color: #f14c4c;'>No matches found for '{search_text}'</span>")
+                self.append_styled_content(f"No matches found for '{search_text}'", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
                 
         except Exception as e:
             self.log_viewer.clear()
-            self.log_viewer.append(f"<span style='color: #f14c4c;'>Error reading log file: {str(e)}</span>")
+            self.append_styled_content(f"Error reading log file: {str(e)}", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
     
     def edit_tracker(self, item):
         """Edit the selected tracker"""
