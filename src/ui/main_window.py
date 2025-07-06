@@ -288,6 +288,126 @@ class MainWindow(QMainWindow):
         self.display_log_file(log_file_path)
         self.update_window_title()
     
+    def convert_ansi_to_html(self, text):
+        """Convert ANSI color codes to HTML formatting"""
+        # ANSI color code patterns
+        # Reset: \x1b[0m
+        # Color codes: \x1b[38;2;r;g;bm (24-bit) or \x1b[38;5;nm (8-bit) or \x1b[38;nm (standard)
+        # Background codes: \x1b[48;2;r;g;bm (24-bit) or \x1b[48;5;nm (8-bit) or \x1b[48;nm (standard)
+        
+        # Standard ANSI color codes mapping
+        ansi_colors = {
+            30: "#000000",  # Black
+            31: "#cd3131",  # Red
+            32: "#0dbc79",  # Green
+            33: "#e5e510",  # Yellow
+            34: "#2472c8",  # Blue
+            35: "#bc3fbc",  # Magenta
+            36: "#11a8cd",  # Cyan
+            37: "#e5e5e5",  # White
+            90: "#666666",  # Bright Black
+            91: "#f14c4c",  # Bright Red
+            92: "#23d18b",  # Bright Green
+            93: "#f5f543",  # Bright Yellow
+            94: "#3b8eea",  # Bright Blue
+            95: "#d670d6",  # Bright Magenta
+            96: "#29b8db",  # Bright Cyan
+            97: "#ffffff",  # Bright White
+        }
+        
+        # Background colors (same as foreground but with different prefix)
+        ansi_bg_colors = {
+            40: "#000000",  # Black
+            41: "#cd3131",  # Red
+            42: "#0dbc79",  # Green
+            43: "#e5e510",  # Yellow
+            44: "#2472c8",  # Blue
+            45: "#bc3fbc",  # Magenta
+            46: "#11a8cd",  # Cyan
+            47: "#e5e5e5",  # White
+            100: "#666666", # Bright Black
+            101: "#f14c4c", # Bright Red
+            102: "#23d18b", # Bright Green
+            103: "#f5f543", # Bright Yellow
+            104: "#3b8eea", # Bright Blue
+            105: "#d670d6", # Bright Magenta
+            106: "#29b8db", # Bright Cyan
+            107: "#ffffff", # Bright White
+        }
+        
+        # Split text into lines to process each line separately
+        lines = text.split('\n')
+        processed_lines = []
+        
+        for line in lines:
+            # Track current styling
+            current_fg = None
+            current_bg = None
+            current_bold = False
+            
+            # Process ANSI codes in the line
+            # Pattern to match ANSI escape sequences
+            ansi_pattern = r'\x1b\[([0-9;]*)m'
+            
+            # Find all ANSI codes in the line
+            codes = re.findall(ansi_pattern, line)
+            if not codes:
+                # No ANSI codes, just return the line as plain text
+                processed_lines.append(line)
+                continue
+            
+            # Remove ANSI codes from the line to get clean text
+            clean_line = re.sub(ansi_pattern, '', line)
+            
+            # Process the codes to determine styling
+            html_line = ""
+            for code_str in codes:
+                if not code_str:  # Reset code [0m
+                    current_fg = None
+                    current_bg = None
+                    current_bold = False
+                    continue
+                
+                # Parse the code string
+                code_parts = [int(x) if x else 0 for x in code_str.split(';')]
+                
+                for code in code_parts:
+                    if code == 0:  # Reset
+                        current_fg = None
+                        current_bg = None
+                        current_bold = False
+                    elif code == 1:  # Bold
+                        current_bold = True
+                    elif code == 22:  # Normal intensity
+                        current_bold = False
+                    elif 30 <= code <= 37 or 90 <= code <= 97:  # Foreground colors
+                        current_fg = ansi_colors.get(code, "#ffffff")
+                    elif 40 <= code <= 47 or 100 <= code <= 107:  # Background colors
+                        current_bg = ansi_bg_colors.get(code, "#000000")
+                    elif code == 39:  # Default foreground
+                        current_fg = None
+                    elif code == 49:  # Default background
+                        current_bg = None
+            
+            # Apply styling to the clean line
+            style_parts = []
+            if current_fg:
+                style_parts.append(f"color: {current_fg}")
+            if current_bg:
+                style_parts.append(f"background-color: {current_bg}")
+            if current_bold:
+                style_parts.append("font-weight: bold")
+            
+            if style_parts:
+                style = "; ".join(style_parts)
+                html_line = f'<span style="{style}">{clean_line}</span>'
+            else:
+                html_line = clean_line
+            
+            processed_lines.append(html_line)
+        
+        return '\n'.join(processed_lines)
+
     def display_log_file(self, file_path):
         """Display the selected log file"""
         self.log_viewer.clear()
@@ -295,7 +415,10 @@ class MainWindow(QMainWindow):
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
                 self.log_viewer.append(f'<span style="color: #569cd6;">=== {os.path.basename(file_path)} ===</span>\n')
-                self.log_viewer.append(content)
+                
+                # Convert ANSI color codes to HTML formatting
+                formatted_content = self.convert_ansi_to_html(content)
+                self.log_viewer.append(formatted_content)
                 self.log_viewer.append("\n")
         except Exception as e:
             logger.error(f"Error reading file {file_path}: {str(e)}")
@@ -326,25 +449,25 @@ class MainWindow(QMainWindow):
             matches = []
             for i, line in enumerate(lines, 1):
                 if search_text.lower() in line.lower():
-                    # Strip ANSI color codes and format the line
-                    clean_line = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', line).strip()
+                    # Convert ANSI color codes to HTML formatting
+                    formatted_line = self.convert_ansi_to_html(line.rstrip('\n'))
                     if self.show_line_numbers.isChecked():
-                        matches.append(f"{i}: {clean_line}")
+                        matches.append(f"<span style='color: #569cd6;'>{i}:</span> {formatted_line}")
                     else:
-                        matches.append(clean_line)
+                        matches.append(formatted_line)
             
             if matches:
                 # Show results in the log viewer
                 self.log_viewer.clear()
-                self.log_viewer.append(f"File: {os.path.basename(log_file_path)} Found {len(matches)} matches\n")
+                self.log_viewer.append(f"<span style='color: #569cd6;'>File: {os.path.basename(log_file_path)} Found {len(matches)} matches</span>\n")
                 self.log_viewer.append("\n".join(matches))
             else:
                 self.log_viewer.clear()
-                self.log_viewer.append(f"No matches found for '{search_text}'")
+                self.log_viewer.append(f"<span style='color: #f14c4c;'>No matches found for '{search_text}'</span>")
                 
         except Exception as e:
             self.log_viewer.clear()
-            self.log_viewer.append(f"Error reading log file: {str(e)}")
+            self.log_viewer.append(f"<span style='color: #f14c4c;'>Error reading log file: {str(e)}</span>")
     
     def edit_tracker(self, item):
         """Edit the selected tracker"""
