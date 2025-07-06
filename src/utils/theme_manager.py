@@ -1,4 +1,7 @@
+import re
+
 from PyQt6.QtGui import QPalette, QColor
+
 
 class ThemeManager:
     # Dark theme colors
@@ -250,3 +253,207 @@ class ThemeManager:
                 background-color: {dialog["primary_button"]["pressed"]};
             }}
         """ 
+
+
+    @staticmethod
+    def convert_ansi_to_html(text):
+        """Convert ANSI color codes to HTML formatting"""
+        # ANSI color code patterns
+        # Reset: \x1b[0m
+        # Color codes: \x1b[38;2;r;g;bm (24-bit) or \x1b[38;5;nm (8-bit) or \x1b[38;nm (standard)
+        # Background codes: \x1b[48;2;r;g;bm (24-bit) or \x1b[48;5;nm (8-bit) or \x1b[48;nm (standard)
+        
+        # Use centralized color constants from theme manager
+        ansi_colors = ThemeManager.ANSI_COLORS
+        ansi_bg_colors = ThemeManager.ANSI_BG_COLORS
+        
+        # Check if we have ANSI codes
+        ansi_pattern = r'\x1b\[[0-9;]*[a-zA-Z]'
+        if not re.search(ansi_pattern, text):
+            return text
+        
+        # Split text into lines to process each line separately
+        lines = text.split('\n')
+        processed_lines = []
+        
+        for line in lines:
+            # Split the line into segments based on ANSI codes
+            ansi_pattern = r'\x1b\[([0-9;]*)m'
+            
+            # Find all ANSI codes and their positions
+            matches = list(re.finditer(ansi_pattern, line))
+            if not matches:
+                # No ANSI codes, just return the line as plain text
+                processed_lines.append(line)
+                continue
+            
+
+            
+            # Track current styling
+            current_fg = None
+            current_bg = None
+            current_bold = False
+            
+            # Build the HTML line by processing each segment
+            html_parts = []
+            last_end = 0
+            
+            for match in matches:
+                # Add text before this ANSI code
+                if match.start() > last_end:
+                    text_segment = line[last_end:match.start()]
+                    if text_segment:
+                        # Apply current styling to this text segment
+                        style_parts = []
+                        if current_fg:
+                            style_parts.append(f"color: {current_fg}")
+                        if current_bg:
+                            style_parts.append(f"background-color: {current_bg}")
+                        if current_bold:
+                            style_parts.append("font-weight: bold")
+                        
+                        if style_parts:
+                            style = "; ".join(style_parts)
+                            html_parts.append(f'<span style="{style}">{text_segment}</span>')
+                        else:
+                            html_parts.append(text_segment)
+                
+                # Process the ANSI code
+                code_str = match.group(1)
+                
+                if not code_str:  # Reset code [0m
+                    current_fg = None
+                    current_bg = None
+                    current_bold = False
+                else:
+                    # Parse the code string
+                    code_parts = [int(x) if x else 0 for x in code_str.split(';')]
+                    
+                    i = 0
+                    while i < len(code_parts):
+                        code = code_parts[i]
+                        
+                        if code == 0:  # Reset
+                            current_fg = None
+                            current_bg = None
+                            current_bold = False
+                        elif code == 1:  # Bold
+                            current_bold = True
+                        elif code == 22:  # Normal intensity
+                            current_bold = False
+                        elif 30 <= code <= 37 or 90 <= code <= 97:  # Foreground colors
+                            current_fg = ansi_colors.get(code, "#ffffff")
+                            # Check if there's a modifier code (like ;20) following
+                            if i + 1 < len(code_parts) and code_parts[i + 1] == 20:
+                                # Apply a dimming effect for the ;20 modifier
+                                if current_fg:
+                                    # Make the color slightly dimmer
+                                    current_fg = ThemeManager._dim_color(current_fg)
+                                i += 1  # Skip the modifier code
+                        elif 40 <= code <= 47 or 100 <= code <= 107:  # Background colors
+                            current_bg = ansi_bg_colors.get(code, "#000000")
+                        elif code == 38:  # Extended foreground color
+                            # Check if next code is 5 (8-bit color) or 2 (24-bit color)
+                            if i + 1 < len(code_parts):
+                                next_code = code_parts[i + 1]
+                                if next_code == 5 and i + 2 < len(code_parts):  # 8-bit color
+                                    color_code = code_parts[i + 2]
+                                    # Map 8-bit colors to our color palette
+                                    if 0 <= color_code <= 15:  # Standard colors
+                                        current_fg = ansi_colors.get(30 + (color_code % 8) + (90 if color_code >= 8 else 0), "#ffffff")
+                                    i += 2  # Skip the next two codes
+                                elif next_code == 2 and i + 4 < len(code_parts):  # 24-bit color
+                                    # Extract RGB values
+                                    r, g, b = code_parts[i + 2], code_parts[i + 3], code_parts[i + 4]
+                                    current_fg = f"#{r:02x}{g:02x}{b:02x}"
+                                    i += 4  # Skip the next four codes
+                                else:  # Handle non-standard extended color format (like 38;20)
+                                    # Treat the next code as a simple color index
+                                    color_code = next_code
+                                    # Map to a reasonable color based on the code
+                                    if color_code == 20:
+                                        current_fg = "#d4d4d4"  # Light gray for code 20 (matches the custom formatter's grey)
+                                    elif 0 <= color_code <= 15:
+                                        # Map to standard ANSI colors
+                                        current_fg = ansi_colors.get(30 + (color_code % 8) + (90 if color_code >= 8 else 0), "#ffffff")
+                                    else:
+                                        # Default to white for unknown codes
+                                        current_fg = "#ffffff"
+                                    i += 1  # Skip the next code
+                            else:
+                                i += 1  # Skip the next code
+                        elif code == 48:  # Extended background color
+                            # Similar handling as foreground
+                            if i + 1 < len(code_parts):
+                                next_code = code_parts[i + 1]
+                                if next_code == 5 and i + 2 < len(code_parts):  # 8-bit color
+                                    color_code = code_parts[i + 2]
+                                    if 0 <= color_code <= 15:  # Standard colors
+                                        current_bg = ansi_bg_colors.get(40 + (color_code % 8) + (100 if color_code >= 8 else 0), "#000000")
+                                    i += 2  # Skip the next two codes
+                                elif next_code == 2 and i + 4 < len(code_parts):  # 24-bit color
+                                    r, g, b = code_parts[i + 2], code_parts[i + 3], code_parts[i + 4]
+                                    current_bg = f"#{r:02x}{g:02x}{b:02x}"
+                                    i += 4  # Skip the next four codes
+                                else:
+                                    i += 1
+                            else:
+                                i += 1
+                        elif code == 39:  # Default foreground
+                            current_fg = None
+                        elif code == 49:  # Default background
+                            current_bg = None
+                        else:
+                            # Unknown code, log it for debugging
+                            # logger.debug(f"Unknown ANSI code: {code}")
+                            pass
+                        
+                        i += 1
+                
+                last_end = match.end()
+            
+            # Add any remaining text after the last ANSI code
+            if last_end < len(line):
+                text_segment = line[last_end:]
+                if text_segment:
+                    # Apply current styling to this text segment
+                    style_parts = []
+                    if current_fg:
+                        style_parts.append(f"color: {current_fg}")
+                    if current_bg:
+                        style_parts.append(f"background-color: {current_bg}")
+                    if current_bold:
+                        style_parts.append("font-weight: bold")
+                    
+                    if style_parts:
+                        style = "; ".join(style_parts)
+                        html_parts.append(f'<span style="{style}">{text_segment}</span>')
+                    else:
+                        html_parts.append(text_segment)
+            
+            # Join all HTML parts (these are on the same line)
+            html_line = ''.join(html_parts)
+            processed_lines.append(html_line)
+        
+        return '<br>'.join(processed_lines)
+
+    @staticmethod
+    def _dim_color(color):
+        """Dim a color by reducing its brightness"""
+        if not color or not color.startswith('#'):
+            return color
+        
+        try:
+            # Parse the hex color
+            r = int(color[1:3], 16)
+            g = int(color[3:5], 16)
+            b = int(color[5:7], 16)
+            
+            # Dim the color by reducing brightness (80%)
+            r = int(r * 0.8)
+            g = int(g * 0.8)
+            b = int(b * 0.8)
+            
+            return f"#{r:02x}{g:02x}{b:02x}"
+        except (ValueError, IndexError):
+            return color
