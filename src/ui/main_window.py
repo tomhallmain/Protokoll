@@ -2,7 +2,7 @@ from datetime import datetime
 import os
 import re
 
-from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                             QPushButton, QLabel, QLineEdit, QTextEdit,
                             QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QCheckBox, QFrame)
 from PyQt6.QtCore import Qt, QSize
@@ -136,6 +136,9 @@ class MainWindow(QMainWindow):
         palette.setColor(QPalette.ColorRole.Base, QColor("#1e1e1e"))  # Dark background
         palette.setColor(QPalette.ColorRole.Text, QColor("#d4d4d4"))  # Light text
         self.log_viewer.setPalette(palette)
+        
+        # Enable rich text (HTML) support
+        self.log_viewer.setAcceptRichText(True)
     
     def load_window_state(self):
         """Load window state from configuration"""
@@ -288,6 +291,26 @@ class MainWindow(QMainWindow):
         self.display_log_file(log_file_path)
         self.update_window_title()
     
+    def _dim_color(self, color):
+        """Dim a color by reducing its brightness"""
+        if not color or not color.startswith('#'):
+            return color
+        
+        try:
+            # Parse the hex color
+            r = int(color[1:3], 16)
+            g = int(color[3:5], 16)
+            b = int(color[5:7], 16)
+            
+            # Dim the color by reducing brightness (80%)
+            r = int(r * 0.8)
+            g = int(g * 0.8)
+            b = int(b * 0.8)
+            
+            return f"#{r:02x}{g:02x}{b:02x}"
+        except (ValueError, IndexError):
+            return color
+
     def append_styled_content(self, text, color=None, bold=False, background_color=None):
         """Append content to the log viewer with optional styling"""
         style_parts = []
@@ -315,78 +338,238 @@ class MainWindow(QMainWindow):
         ansi_colors = ThemeManager.ANSI_COLORS
         ansi_bg_colors = ThemeManager.ANSI_BG_COLORS
         
+        # Check if we have ANSI codes
+        ansi_pattern = r'\x1b\[[0-9;]*[a-zA-Z]'
+        if not re.search(ansi_pattern, text):
+            return text
+        
         # Split text into lines to process each line separately
         lines = text.split('\n')
         processed_lines = []
         
         for line in lines:
+            # Split the line into segments based on ANSI codes
+            ansi_pattern = r'\x1b\[([0-9;]*)m'
+            
+            # Find all ANSI codes and their positions
+            matches = list(re.finditer(ansi_pattern, line))
+            if not matches:
+                # No ANSI codes, just return the line as plain text
+                processed_lines.append(line)
+                continue
+            
+
+            
             # Track current styling
             current_fg = None
             current_bg = None
             current_bold = False
             
-            # Process ANSI codes in the line
-            # Pattern to match ANSI escape sequences
-            ansi_pattern = r'\x1b\[([0-9;]*)m'
+            # Build the HTML line by processing each segment
+            html_parts = []
+            last_end = 0
             
-            # Find all ANSI codes in the line
-            codes = re.findall(ansi_pattern, line)
-            if not codes:
-                # No ANSI codes, just return the line as plain text
-                processed_lines.append(line)
-                continue
-            
-            # Remove ANSI codes from the line to get clean text
-            clean_line = re.sub(ansi_pattern, '', line)
-            
-            # Process the codes to determine styling
-            html_line = ""
-            for code_str in codes:
+            for match in matches:
+                # Add text before this ANSI code
+                if match.start() > last_end:
+                    text_segment = line[last_end:match.start()]
+                    if text_segment:
+                        # Apply current styling to this text segment
+                        style_parts = []
+                        if current_fg:
+                            style_parts.append(f"color: {current_fg}")
+                        if current_bg:
+                            style_parts.append(f"background-color: {current_bg}")
+                        if current_bold:
+                            style_parts.append("font-weight: bold")
+                        
+                        if style_parts:
+                            style = "; ".join(style_parts)
+                            html_parts.append(f'<span style="{style}">{text_segment}</span>')
+                        else:
+                            html_parts.append(text_segment)
+                
+                # Process the ANSI code
+                code_str = match.group(1)
+                
                 if not code_str:  # Reset code [0m
                     current_fg = None
                     current_bg = None
                     current_bold = False
-                    continue
+                else:
+                    # Parse the code string
+                    code_parts = [int(x) if x else 0 for x in code_str.split(';')]
+                    
+                    i = 0
+                    while i < len(code_parts):
+                        code = code_parts[i]
+                        
+                        if code == 0:  # Reset
+                            current_fg = None
+                            current_bg = None
+                            current_bold = False
+                        elif code == 1:  # Bold
+                            current_bold = True
+                        elif code == 22:  # Normal intensity
+                            current_bold = False
+                        elif 30 <= code <= 37 or 90 <= code <= 97:  # Foreground colors
+                            current_fg = ansi_colors.get(code, "#ffffff")
+                            # Check if there's a modifier code (like ;20) following
+                            if i + 1 < len(code_parts) and code_parts[i + 1] == 20:
+                                # Apply a dimming effect for the ;20 modifier
+                                if current_fg:
+                                    # Make the color slightly dimmer
+                                    current_fg = self._dim_color(current_fg)
+                                i += 1  # Skip the modifier code
+                        elif 40 <= code <= 47 or 100 <= code <= 107:  # Background colors
+                            current_bg = ansi_bg_colors.get(code, "#000000")
+                        elif code == 38:  # Extended foreground color
+                            # Check if next code is 5 (8-bit color) or 2 (24-bit color)
+                            if i + 1 < len(code_parts):
+                                next_code = code_parts[i + 1]
+                                if next_code == 5 and i + 2 < len(code_parts):  # 8-bit color
+                                    color_code = code_parts[i + 2]
+                                    # Map 8-bit colors to our color palette
+                                    if 0 <= color_code <= 15:  # Standard colors
+                                        current_fg = ansi_colors.get(30 + (color_code % 8) + (90 if color_code >= 8 else 0), "#ffffff")
+                                    i += 2  # Skip the next two codes
+                                elif next_code == 2 and i + 4 < len(code_parts):  # 24-bit color
+                                    # Extract RGB values
+                                    r, g, b = code_parts[i + 2], code_parts[i + 3], code_parts[i + 4]
+                                    current_fg = f"#{r:02x}{g:02x}{b:02x}"
+                                    i += 4  # Skip the next four codes
+                                else:  # Handle non-standard extended color format (like 38;20)
+                                    # Treat the next code as a simple color index
+                                    color_code = next_code
+                                    # Map to a reasonable color based on the code
+                                    if color_code == 20:
+                                        current_fg = "#d4d4d4"  # Light gray for code 20 (matches the custom formatter's grey)
+                                    elif 0 <= color_code <= 15:
+                                        # Map to standard ANSI colors
+                                        current_fg = ansi_colors.get(30 + (color_code % 8) + (90 if color_code >= 8 else 0), "#ffffff")
+                                    else:
+                                        # Default to white for unknown codes
+                                        current_fg = "#ffffff"
+                                    i += 1  # Skip the next code
+                            else:
+                                i += 1  # Skip the next code
+                        elif code == 48:  # Extended background color
+                            # Similar handling as foreground
+                            if i + 1 < len(code_parts):
+                                next_code = code_parts[i + 1]
+                                if next_code == 5 and i + 2 < len(code_parts):  # 8-bit color
+                                    color_code = code_parts[i + 2]
+                                    if 0 <= color_code <= 15:  # Standard colors
+                                        current_bg = ansi_bg_colors.get(40 + (color_code % 8) + (100 if color_code >= 8 else 0), "#000000")
+                                    i += 2  # Skip the next two codes
+                                elif next_code == 2 and i + 4 < len(code_parts):  # 24-bit color
+                                    r, g, b = code_parts[i + 2], code_parts[i + 3], code_parts[i + 4]
+                                    current_bg = f"#{r:02x}{g:02x}{b:02x}"
+                                    i += 4  # Skip the next four codes
+                                else:
+                                    i += 1
+                            else:
+                                i += 1
+                        elif code == 39:  # Default foreground
+                            current_fg = None
+                        elif code == 49:  # Default background
+                            current_bg = None
+                        else:
+                            # Unknown code, log it for debugging
+                            # logger.debug(f"Unknown ANSI code: {code}")
+                            pass
+                        
+                        i += 1
                 
-                # Parse the code string
-                code_parts = [int(x) if x else 0 for x in code_str.split(';')]
-                
-                for code in code_parts:
-                    if code == 0:  # Reset
-                        current_fg = None
-                        current_bg = None
-                        current_bold = False
-                    elif code == 1:  # Bold
-                        current_bold = True
-                    elif code == 22:  # Normal intensity
-                        current_bold = False
-                    elif 30 <= code <= 37 or 90 <= code <= 97:  # Foreground colors
-                        current_fg = ansi_colors.get(code, "#ffffff")
-                    elif 40 <= code <= 47 or 100 <= code <= 107:  # Background colors
-                        current_bg = ansi_bg_colors.get(code, "#000000")
-                    elif code == 39:  # Default foreground
-                        current_fg = None
-                    elif code == 49:  # Default background
-                        current_bg = None
+                last_end = match.end()
             
-            # Apply styling to the clean line
-            style_parts = []
-            if current_fg:
-                style_parts.append(f"color: {current_fg}")
-            if current_bg:
-                style_parts.append(f"background-color: {current_bg}")
-            if current_bold:
-                style_parts.append("font-weight: bold")
+            # Add any remaining text after the last ANSI code
+            if last_end < len(line):
+                text_segment = line[last_end:]
+                if text_segment:
+                    # Apply current styling to this text segment
+                    style_parts = []
+                    if current_fg:
+                        style_parts.append(f"color: {current_fg}")
+                    if current_bg:
+                        style_parts.append(f"background-color: {current_bg}")
+                    if current_bold:
+                        style_parts.append("font-weight: bold")
+                    
+                    if style_parts:
+                        style = "; ".join(style_parts)
+                        html_parts.append(f'<span style="{style}">{text_segment}</span>')
+                    else:
+                        html_parts.append(text_segment)
             
-            if style_parts:
-                style = "; ".join(style_parts)
-                html_line = f'<span style="{style}">{clean_line}</span>'
-            else:
-                html_line = clean_line
-            
+            # Join all HTML parts (these are on the same line)
+            html_line = ''.join(html_parts)
             processed_lines.append(html_line)
         
-        return '\n'.join(processed_lines)
+        return '<br>'.join(processed_lines)
+
+    def _load_single_long_line(self, content):
+        """Handle a single very long line (e.g., minified JSON) by truncating"""
+        max_length = 10000  # Show first 10KB
+        
+        if len(content) > max_length:
+            # Truncate and show warning
+            truncated_content = content[:max_length]
+            self.append_styled_content("⚠️  File contains a very long line. Showing first 10KB:", color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
+            self.log_viewer.append("\n")
+            
+            # Convert the truncated content
+            formatted_content = self.convert_ansi_to_html(truncated_content)
+            self.log_viewer.append(formatted_content)
+            
+            # Show truncation indicator
+            self.append_styled_content(f"\n... (truncated, original length: {len(content):,} characters)", color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
+        else:
+            # Convert the full content
+            formatted_content = self.convert_ansi_to_html(content)
+            self.log_viewer.append(formatted_content)
+
+    def _load_large_file_chunked(self, content):
+        """Handle a large multi-line file by loading in chunks"""
+        lines = content.split('\n')
+        chunk_size = 500  # Process 500 lines at a time
+        total_chunks = (len(lines) + chunk_size - 1) // chunk_size
+        
+        # Show progress indicator
+        self.append_styled_content(f"Loading large log file (0/{total_chunks} chunks)...", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+        QApplication.processEvents()
+        
+        for i in range(0, len(lines), chunk_size):
+            chunk_lines = lines[i:i+chunk_size]
+            chunk_content = '\n'.join(chunk_lines)
+            
+            # Convert this chunk
+            formatted_chunk = self.convert_ansi_to_html(chunk_content)
+            self.log_viewer.append(formatted_chunk)
+            
+            # Update progress indicator every 5 chunks
+            current_chunk = (i // chunk_size) + 1
+            if current_chunk % 5 == 0 or current_chunk == total_chunks:
+                # Remove old progress indicator
+                cursor = self.log_viewer.textCursor()
+                cursor.movePosition(cursor.MoveOperation.Start)
+                cursor.movePosition(cursor.MoveOperation.Down, cursor.MoveMode.KeepAnchor)
+                cursor.removeSelectedText()
+                cursor.deletePreviousChar()  # Remove the newline
+                
+                # Add updated progress indicator
+                self.append_styled_content(f"Loading large log file ({current_chunk}/{total_chunks} chunks)...", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+            
+            # Process events every few chunks to keep UI responsive
+            if i % (chunk_size * 2) == 0:
+                QApplication.processEvents()
+        
+        # Remove final progress indicator
+        cursor = self.log_viewer.textCursor()
+        cursor.movePosition(cursor.MoveOperation.Start)
+        cursor.movePosition(cursor.MoveOperation.Down, cursor.MoveMode.KeepAnchor)
+        cursor.removeSelectedText()
+        cursor.deletePreviousChar()  # Remove the newline
 
     def display_log_file(self, file_path):
         """Display the selected log file"""
@@ -397,9 +580,21 @@ class MainWindow(QMainWindow):
                 self.append_styled_content(f"=== {os.path.basename(file_path)} ===", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
                 self.log_viewer.append("\n")
                 
-                # Convert ANSI color codes to HTML formatting
-                formatted_content = self.convert_ansi_to_html(content)
-                self.log_viewer.append(formatted_content)
+                # Determine how to handle the content based on its characteristics
+                content_length = len(content)
+                line_count = content.count('\n') + 1
+                
+                if content_length > 1000000:  # Very large file (>1MB)
+                    # Case 2: Multi-lined sections, very long file - use chunks
+                    if line_count > 100:  # Multiple lines
+                        self._load_large_file_chunked(content)
+                    else:
+                        # Case 1: One very long line (minified JSON, etc.) - truncate
+                        self._load_single_long_line(content)
+                else:
+                    # Case 3: Single append for reasonable length files
+                    formatted_content = self.convert_ansi_to_html(content)
+                    self.log_viewer.append(formatted_content)
                 self.log_viewer.append("\n")
         except Exception as e:
             logger.error(f"Error reading file {file_path}: {str(e)}")
