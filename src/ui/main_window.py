@@ -126,8 +126,14 @@ class MainWindow(QMainWindow):
         self.show_line_numbers.setObjectName("showLineNumbers")
         self.show_line_numbers.setChecked(True)
         
+        # Add Clear button
+        clear_btn = QPushButton("Clear")
+        clear_btn.setObjectName("clearButton")
+        clear_btn.clicked.connect(self.clear_search_and_reload)
+        
         search_layout.addWidget(self.search_edit)
         search_layout.addWidget(search_btn)
+        search_layout.addWidget(clear_btn)
         search_layout.addWidget(self.show_line_numbers)
         
         # Open in Editor button with context menu
@@ -496,13 +502,27 @@ class MainWindow(QMainWindow):
         
         self.log_viewer.append("\n")
     
+    def clear_search_and_reload(self):
+        """Clear the search bar and reload the current log file if one is selected."""
+        logger.debug("Clearing search bar and reloading current log file")
+        self.search_edit.clear()
+        selected_items = self.files_list.selectedItems()
+        if selected_items:
+            log_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+            self.display_log_file(log_file_path)
+
     def search_logs(self):
         """Search through the current log file"""
         if not self.current_tracker:
             return
         
         search_text = self.search_edit.text().strip()
+        # If search is empty, reload the full log file
         if not search_text:
+            selected_items = self.files_list.selectedItems()
+            if selected_items:
+                log_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+                self.display_log_file(log_file_path)
             return
         
         # Get the currently selected log file
