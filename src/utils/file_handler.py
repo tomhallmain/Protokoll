@@ -8,9 +8,9 @@ import warnings
 from pathlib import Path
 from typing import Optional, Tuple, Dict, Any, Union
 
-from .logging_manager import LoggingManager
+from .logging_setup import get_logger
 
-logger = LoggingManager.get_logger('utils.file_handler')
+logger = get_logger('utils.file_handler')
 
 if sys.platform == 'win32':
     try:

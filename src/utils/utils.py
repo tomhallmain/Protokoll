@@ -12,6 +12,10 @@ import traceback
 import unicodedata
 import subprocess
 
+from .logging_setup import get_logger
+
+logger = get_logger('utils.utils')
+
 
 class Utils:
     # Regular expression to match emoji characters
@@ -694,32 +698,45 @@ class Utils:
                     executable = cmd_parts[0]
                     args = cmd_parts[1:] if len(cmd_parts) > 1 else []
                     
+                    logger.debug(f"Opening file with custom editor: {command}")
+                    
                     # Check if executable exists
                     if not Utils.executable_available(executable):
+                        error_msg = f"Executable not found: {executable}"
+                        logger.error(error_msg)
                         if error_callback:
-                            error_callback(error_message=f"Executable not found: {executable}")
+                            error_callback(error_message=error_msg)
                         return
                     
                     # Run the custom command
                     subprocess.run([executable] + args, check=True)
+                    logger.info(f"Successfully opened file with custom editor: {filepath}")
                 else:
                     # Use system default text editor
+                    logger.debug(f"Opening file with default editor: {filepath}")
                     if sys.platform == 'win32':
                         subprocess.run(["notepad.exe", filepath], check=True)
                     elif sys.platform == 'darwin':
                         subprocess.run(["open", "-t", filepath], check=True)
                     else:
                         subprocess.run(["xdg-open", filepath], check=True)
+                    logger.info(f"Successfully opened file with default editor: {filepath}")
                         
             except subprocess.CalledProcessError as e:
+                error_msg = f"Failed to open file with editor: {str(e)}"
+                logger.error(error_msg)
                 if error_callback:
-                    error_callback(error_message=f"Failed to open file with editor: {str(e)}")
+                    error_callback(error_message=error_msg)
             except FileNotFoundError as e:
+                error_msg = f"Editor not found: {str(e)}"
+                logger.error(error_msg)
                 if error_callback:
-                    error_callback(error_message=f"Editor not found: {str(e)}")
+                    error_callback(error_message=error_msg)
             except Exception as e:
+                error_msg = f"Unexpected error opening file: {str(e)}"
+                logger.error(error_msg)
                 if error_callback:
-                    error_callback(error_message=f"Unexpected error opening file: {str(e)}")
+                    error_callback(error_message=error_msg)
         
         # Start the editor in a separate thread
         thread = threading.Thread(target=run_editor, daemon=True)

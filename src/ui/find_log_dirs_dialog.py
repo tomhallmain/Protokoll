@@ -5,9 +5,9 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
 from ..internal.log_directory_finder import LogDirectoryFinder
 from ..utils.theme_manager import ThemeManager
-from ..utils.logging_manager import LoggingManager
+from ..utils.logging_setup import get_logger
 
-logger = LoggingManager.get_logger('ui.find_log_dirs_dialog')
+logger = get_logger('ui.find_log_dirs_dialog')
 
 class DirectorySearchThread(QThread):
     """Thread for searching directories to keep UI responsive."""
@@ -18,7 +18,7 @@ class DirectorySearchThread(QThread):
     def __init__(self, app_name: str):
         super().__init__()
         self.app_name = app_name
-        self.logger = LoggingManager.get_logger('ui.find_log_dirs_dialog.search_thread')
+        self.logger = get_logger('ui.find_log_dirs_dialog.search_thread')
     
     def run(self):
         """Run the directory search."""

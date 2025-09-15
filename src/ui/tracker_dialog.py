@@ -6,8 +6,11 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
 from PyQt6.QtCore import Qt
 
 from ..utils.theme_manager import ThemeManager
+from ..utils.logging_setup import get_logger
 from ..internal.tracker import Tracker
 from .find_log_dirs_dialog import FindLogDirsDialog
+
+logger = get_logger('ui.tracker_dialog')
 
 class TrackerDialog(QDialog):
     def __init__(self, tracker: Tracker = None, parent=None):
@@ -117,12 +120,18 @@ class TrackerDialog(QDialog):
     
     def find_directories(self):
         """Open dialog to find log directories."""
-        dialog = FindLogDirsDialog(self.name_input.text(), self)
+        app_name = self.name_input.text()
+        logger.debug(f"Finding directories for app: {app_name}")
+        dialog = FindLogDirsDialog(app_name, self)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             selected_dirs = dialog.get_selected_directories()
+            logger.info(f"Found {len(selected_dirs)} directories for {app_name}")
             for directory in selected_dirs:
                 if directory not in [self.dirs_list.item(i).text() for i in range(self.dirs_list.count())]:
                     self.dirs_list.addItem(directory)
+                    logger.debug(f"Added directory: {directory}")
+        else:
+            logger.debug("Directory search cancelled by user")
     
     def add_directory(self):
         """Add a new log directory."""
@@ -136,15 +145,21 @@ class TrackerDialog(QDialog):
             # Check if directory already exists in list
             for i in range(self.dirs_list.count()):
                 if self.dirs_list.item(i).text() == directory:
+                    logger.debug(f"Directory already in list: {directory}")
                     return
             
             self.dirs_list.addItem(directory)
+            logger.info(f"Added directory: {directory}")
     
     def remove_directory(self):
         """Remove selected log directory."""
         current_item = self.dirs_list.currentItem()
         if current_item:
+            directory = current_item.text()
             self.dirs_list.takeItem(self.dirs_list.row(current_item))
+            logger.info(f"Removed directory: {directory}")
+        else:
+            logger.debug("No directory selected for removal")
     
     def get_tracker_data(self) -> dict:
         """Get the tracker data from the dialog."""

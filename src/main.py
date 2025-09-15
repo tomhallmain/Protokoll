@@ -3,12 +3,12 @@ import sys
 
 from PyQt6.QtWidgets import QApplication
 from .ui.main_window import MainWindow
-from .utils.logging_manager import LoggingManager
+from .utils.logging_setup import get_logger
 from .utils.theme_manager import ThemeManager
 
 def main():
     # Set up logging
-    logger = LoggingManager.setup_logging(level=logging.DEBUG)
+    logger = get_logger('main')
     logger.info("Starting Protokoll application")
     
     # Create application

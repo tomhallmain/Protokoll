@@ -6,10 +6,10 @@ from typing import List, Dict, Any, Optional, Set
 
 from .log_directory_finder import LogDirectoryFinder
 from ..utils.config_manager import ConfigManager
-from ..utils.logging_manager import LoggingManager
+from ..utils.logging_setup import get_logger
 from ..utils.file_handler import FileHandler
 
-logger = LoggingManager.get_logger('internal.tracker')
+logger = get_logger('internal.tracker')
 
 class Tracker:
     def __init__(self, name: str, description: str = "", config_manager: Optional[ConfigManager] = None):

@@ -10,12 +10,12 @@ from PyQt6.QtGui import QFont, QPalette, QColor, QFontMetrics
 from ..internal.tracker import Tracker
 from ..utils.config_manager import ConfigManager
 from ..utils.theme_manager import ThemeManager
-from ..utils.logging_manager import LoggingManager
+from ..utils.logging_setup import get_logger
 from ..utils.file_handler import FileHandler
 from ..utils.utils import Utils
 from .tracker_dialog import TrackerDialog
 
-logger = LoggingManager.get_logger('ui.main_window')
+logger = get_logger('ui.main_window')
 
 class MainWindow(QMainWindow):
     def __init__(self):

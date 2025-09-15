@@ -3,9 +3,9 @@ import os
 from pathlib import Path
 from typing import Any, Dict
 
-from ..utils.logging_manager import LoggingManager
+from ..utils.logging_setup import get_logger
 
-logger = LoggingManager.get_logger('utils.config_manager')
+logger = get_logger('utils.config_manager')
 
 class ConfigManager:
     def __init__(self):

@@ -5,11 +5,11 @@ import re
 import platform
 from typing import Dict, List, Tuple
 
-from ..utils.logging_manager import LoggingManager
+from ..utils.logging_setup import get_logger
 from ..utils.utils import Utils
 from ..utils.file_handler import FileHandler
 
-logger = LoggingManager.get_logger('internal.directory_finder')
+logger = get_logger('internal.directory_finder')
 
 class LogDirectoryFinder:
     """Utility class for finding log directories based on application name."""
