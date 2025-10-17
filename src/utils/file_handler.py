@@ -276,6 +276,14 @@ class FileHandler:
         if sample.startswith(b'\xfe\xff'):
             return 'utf-16-be'
         
+        # For files with ANSI escape codes, try UTF-8 first since most modern logs use UTF-8
+        try:
+            # Test if sample can be decoded as UTF-8
+            sample.decode('utf-8')
+            return 'utf-8'
+        except UnicodeDecodeError:
+            pass
+        
         # Use chardet as fallback
         try:
             result = chardet.detect(sample)
