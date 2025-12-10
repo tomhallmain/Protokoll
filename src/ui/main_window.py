@@ -131,9 +131,15 @@ class MainWindow(QMainWindow):
         clear_btn.setObjectName("clearButton")
         clear_btn.clicked.connect(self.clear_search_and_reload)
         
+        # Add Refresh button
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.setObjectName("refreshButton")
+        refresh_btn.clicked.connect(self.refresh_current_log)
+        
         search_layout.addWidget(self.search_edit)
         search_layout.addWidget(search_btn)
         search_layout.addWidget(clear_btn)
+        search_layout.addWidget(refresh_btn)
         search_layout.addWidget(self.show_line_numbers)
         
         # Open in Editor button with context menu
@@ -510,6 +516,37 @@ class MainWindow(QMainWindow):
         if selected_items:
             log_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
             self.display_log_file(log_file_path)
+
+    def refresh_current_log(self):
+        """Refresh the currently viewed log file and update the log files list."""
+        logger.debug("Refreshing current log file and log files list")
+        
+        # Save the currently selected file path before refreshing
+        selected_items = self.files_list.selectedItems()
+        selected_file_path = None
+        if selected_items:
+            selected_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+        
+        # Refresh the log files list to pick up any new files
+        if self.current_tracker:
+            self.update_log_files_list()
+        
+        # Reload the previously selected file (or the newly selected one if it still exists)
+        if selected_file_path:
+            # Try to find the file in the updated list
+            for i in range(self.files_list.count()):
+                item = self.files_list.item(i)
+                if item.data(Qt.ItemDataRole.UserRole) == selected_file_path:
+                    # File still exists, select it and reload
+                    self.files_list.setCurrentRow(i)
+                    self.display_log_file(selected_file_path)
+                    return
+            
+            # File no longer exists, but we still have a selection from update_log_files_list
+            # The on_log_file_selected will be called automatically
+        elif self.files_list.count() > 0:
+            # No previous selection, but we have files - select the first one
+            self.files_list.setCurrentRow(0)
 
     def search_logs(self):
         """Search through the current log file"""
