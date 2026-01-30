@@ -33,6 +33,11 @@ class ConfigManager:
                 "font_size": 12,
                 "font_family": "Consolas",
                 "line_wrap": True
+            },
+            "search": {
+                "show_line_numbers": True,
+                "use_regex": False,
+                "limit_to_line_start": False
             }
         }
         

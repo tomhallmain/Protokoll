@@ -1,9 +1,11 @@
 from datetime import datetime
 import os
+import re
 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                             QPushButton, QLabel, QLineEdit, QTextEdit,
-                            QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QCheckBox, QFrame, QMenu)
+                            QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QFrame, QMenu,
+                            QToolButton, QStyle)
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont, QPalette, QColor, QFontMetrics
 
@@ -123,9 +125,32 @@ class MainWindow(QMainWindow):
         search_btn = QPushButton("Search")
         search_btn.setObjectName("searchButton")
         search_btn.clicked.connect(self.search_logs)
-        self.show_line_numbers = QCheckBox("Show line numbers")
+        
+        # Icon toggles (tooltips explain each); state persisted in config
+        style = self.style()
+        self.show_line_numbers = QToolButton()
         self.show_line_numbers.setObjectName("showLineNumbers")
-        self.show_line_numbers.setChecked(True)
+        self.show_line_numbers.setCheckable(True)
+        self.show_line_numbers.setChecked(self.config_manager.get("search.show_line_numbers", True))
+        self.show_line_numbers.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_FileDialogListView))
+        self.show_line_numbers.setToolTip("Show line numbers")
+        self.show_line_numbers.toggled.connect(self._save_search_settings)
+        
+        self.use_regex = QToolButton()
+        self.use_regex.setObjectName("useRegex")
+        self.use_regex.setCheckable(True)
+        self.use_regex.setChecked(self.config_manager.get("search.use_regex", False))
+        self.use_regex.setText(".*")
+        self.use_regex.setToolTip("Use regular expression")
+        self.use_regex.toggled.connect(self._save_search_settings)
+        
+        self.limit_to_line_start = QToolButton()
+        self.limit_to_line_start.setObjectName("limitToLineStart")
+        self.limit_to_line_start.setCheckable(True)
+        self.limit_to_line_start.setChecked(self.config_manager.get("search.limit_to_line_start", False))
+        self.limit_to_line_start.setText("^")
+        self.limit_to_line_start.setToolTip("Match only at start of log line (after level: INFO, ERROR, WARNING, DEBUG, TRACE)")
+        self.limit_to_line_start.toggled.connect(self._save_search_settings)
         
         # Add Clear button
         clear_btn = QPushButton("Clear")
@@ -142,6 +167,8 @@ class MainWindow(QMainWindow):
         search_layout.addWidget(clear_btn)
         search_layout.addWidget(refresh_btn)
         search_layout.addWidget(self.show_line_numbers)
+        search_layout.addWidget(self.use_regex)
+        search_layout.addWidget(self.limit_to_line_start)
         
         # Open in Editor button with context menu
         open_editor_btn = QPushButton("Open in Editor")
@@ -227,6 +254,12 @@ class MainWindow(QMainWindow):
         self.config_manager.set('window.height', self.height())
         self.config_manager.set('window.x', self.x())
         self.config_manager.set('window.y', self.y())
+
+    def _save_search_settings(self, _checked=None):
+        """Persist search toggle states to config (called when any search toggle changes)."""
+        self.config_manager.set("search.show_line_numbers", self.show_line_numbers.isChecked())
+        self.config_manager.set("search.use_regex", self.use_regex.isChecked())
+        self.config_manager.set("search.limit_to_line_start", self.limit_to_line_start.isChecked())
     
     def load_trackers(self):
         """Load and display all available trackers"""
@@ -583,9 +616,34 @@ class MainWindow(QMainWindow):
         # Search through the content
         lines = content.split('\n')
         matches = []
-        
+        use_regex = self.use_regex.isChecked()
+        limit_to_line_start = self.limit_to_line_start.isChecked()
+        # Strip optional timestamp + level so we search only in the message part; full line is still displayed.
+        log_level_pattern = re.compile(r"^.*?(INFO|ERROR|WARNING|DEBUG|TRACE)\W*", re.IGNORECASE)
+
+        if use_regex:
+            try:
+                search_re = re.compile(search_text, re.IGNORECASE)
+            except re.error:
+                self.log_viewer.clear()
+                self.append_styled_content(f"Invalid regular expression: {search_text}", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
+                return
+        else:
+            search_text_lower = search_text.lower()
+
         for i, line in enumerate(lines, 1):
-            if search_text.lower() in line.lower():
+            if limit_to_line_start:
+                search_in = log_level_pattern.sub("", line, count=1)
+                if use_regex:
+                    matched = search_re.match(search_in) is not None
+                else:
+                    matched = search_in.lower().startswith(search_text_lower)
+            else:
+                if use_regex:
+                    matched = bool(search_re.search(line))
+                else:
+                    matched = search_text_lower in line.lower()
+            if matched:
                 # Convert ANSI color codes to HTML formatting
                 formatted_line = ThemeManager.convert_ansi_to_html(line.rstrip('\n'))
                 if self.show_line_numbers.isChecked():
@@ -615,7 +673,9 @@ class MainWindow(QMainWindow):
                     self.log_viewer.append(match)
         else:
             self.log_viewer.clear()
-            self.append_styled_content(f"No matches found for '{search_text}'", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
+            mode = "regex" if use_regex else "plain text"
+            scope = "limit to line start" if limit_to_line_start else "full line"
+            self.append_styled_content(f"No matches found for '{search_text}' ({mode}, {scope})", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
     
     def edit_tracker(self, item):
         """Edit the selected tracker"""
