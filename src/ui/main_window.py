@@ -13,6 +13,7 @@ from ..utils.theme_manager import ThemeManager
 from ..utils.logging_setup import get_logger
 from ..utils.file_handler import FileHandler
 from ..utils.utils import Utils
+from .toast import show_toast
 from .tracker_dialog import TrackerDialog
 
 logger = get_logger('ui.main_window')
@@ -151,6 +152,9 @@ class MainWindow(QMainWindow):
         editor_menu = QMenu(open_editor_btn)
         default_action = editor_menu.addAction("Use Default Editor")
         default_action.triggered.connect(self.open_in_default_editor)
+        
+        copy_path_action = editor_menu.addAction("Copy path to clipboard")
+        copy_path_action.triggered.connect(self.copy_log_path_to_clipboard)
         
         custom_action = editor_menu.addAction("Configure Custom Editor...")
         custom_action.triggered.connect(self.configure_custom_editor)
@@ -350,9 +354,8 @@ class MainWindow(QMainWindow):
         title = "Protokoll"
         if self.current_tracker:
             title += f" - {self.current_tracker.name}"
-            selected_items = self.files_list.selectedItems()
-            if selected_items:
-                log_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+            log_file_path = self.get_current_log_file_path()
+            if log_file_path:
                 log_file = os.path.basename(log_file_path)
                 try:
                     last_modified = os.path.getmtime(log_file_path)
@@ -364,10 +367,9 @@ class MainWindow(QMainWindow):
     
     def on_log_file_selected(self):
         """Handle log file selection"""
-        selected_items = self.files_list.selectedItems()
-        if not selected_items:
+        log_file_path = self.get_current_log_file_path()
+        if not log_file_path:
             return
-        log_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
         # Save last selected log file for this tracker
         if self.current_tracker:
             tracker_key = f"last_log_file_{self.current_tracker.name}"
@@ -512,9 +514,8 @@ class MainWindow(QMainWindow):
         """Clear the search bar and reload the current log file if one is selected."""
         logger.debug("Clearing search bar and reloading current log file")
         self.search_edit.clear()
-        selected_items = self.files_list.selectedItems()
-        if selected_items:
-            log_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+        log_file_path = self.get_current_log_file_path()
+        if log_file_path:
             self.display_log_file(log_file_path)
 
     def refresh_current_log(self):
@@ -522,10 +523,7 @@ class MainWindow(QMainWindow):
         logger.debug("Refreshing current log file and log files list")
         
         # Save the currently selected file path before refreshing
-        selected_items = self.files_list.selectedItems()
-        selected_file_path = None
-        if selected_items:
-            selected_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+        selected_file_path = self.get_current_log_file_path()
         
         # Refresh the log files list to pick up any new files
         if self.current_tracker:
@@ -556,18 +554,15 @@ class MainWindow(QMainWindow):
         search_text = self.search_edit.text().strip()
         # If search is empty, reload the full log file
         if not search_text:
-            selected_items = self.files_list.selectedItems()
-            if selected_items:
-                log_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+            log_file_path = self.get_current_log_file_path()
+            if log_file_path:
                 self.display_log_file(log_file_path)
             return
-        
+
         # Get the currently selected log file
-        selected_items = self.files_list.selectedItems()
-        if not selected_items:
+        log_file_path = self.get_current_log_file_path()
+        if not log_file_path:
             return
-        
-        log_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
         
         # Validate file before searching
         is_valid, reason, file_info = self.file_handler.validate_file_for_viewing(log_file_path)
@@ -672,31 +667,47 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 logger.error(f"Error updating tracker: {str(e)}")
                 QMessageBox.critical(self, "Error", f"Failed to update tracker: {str(e)}")
-    
-    def open_in_editor(self):
-        """Open the currently selected log file in the system's default text editor or custom editor"""
+
+    def get_current_log_file_path(self):
+        """Return the path of the currently selected log file, or None if none is selected."""
         selected_items = self.files_list.selectedItems()
         if not selected_items:
+            return None
+        return selected_items[0].data(Qt.ItemDataRole.UserRole)
+
+    def open_in_editor(self):
+        """Open the currently selected log file in the system's default text editor or custom editor"""
+        log_file_path = self.get_current_log_file_path()
+        if not log_file_path:
             QMessageBox.information(self, "No File Selected", "Please select a log file to open in the editor.")
             return
-        
-        log_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
-        
+
         # Get custom editor command from config if available
         custom_editor = self.config_manager.get('custom_editor_command')
-        
+
         Utils.open_file_with_editor(log_file_path, custom_editor, self.handle_error)
+        show_toast(self, "Opening in editor")
 
     def open_in_default_editor(self):
         """Open the currently selected log file in the system's default text editor"""
-        selected_items = self.files_list.selectedItems()
-        if not selected_items:
+        log_file_path = self.get_current_log_file_path()
+        if not log_file_path:
             QMessageBox.information(self, "No File Selected", "Please select a log file to open in the editor.")
             return
-        
-        log_file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
-        
+
         Utils.open_file_with_editor(log_file_path, None, self.handle_error)  # Use default editor
+        show_toast(self, "Opening in editor")
+
+    def copy_log_path_to_clipboard(self):
+        """Copy the absolute path of the currently selected log file to the clipboard."""
+        log_file_path = self.get_current_log_file_path()
+        if not log_file_path:
+            QMessageBox.information(self, "No File Selected", "Please select a log file to copy its path.")
+            return
+
+        absolute_path = os.path.abspath(log_file_path)
+        QApplication.clipboard().setText(absolute_path)
+        show_toast(self, "Path copied to clipboard")
 
     def configure_custom_editor(self):
         """Show dialog to configure custom editor command"""
@@ -733,11 +744,11 @@ class MainWindow(QMainWindow):
                     return
             
             self.config_manager.set('custom_editor_command', command.strip())
-            QMessageBox.information(self, "Success", f"Custom editor command saved: {command.strip()}")
+            show_toast(self, "Custom editor saved")
         elif ok and not command.strip():
             # User cleared the command
             self.config_manager.set('custom_editor_command', '')
-            QMessageBox.information(self, "Success", "Custom editor command cleared. Will use default editor.")
+            show_toast(self, "Custom editor cleared")
 
     def clear_custom_editor(self):
         """Clear the custom editor command"""
@@ -748,7 +759,7 @@ class MainWindow(QMainWindow):
         
         if reply == QMessageBox.StandardButton.Yes:
             self.config_manager.set('custom_editor_command', '')
-            QMessageBox.information(self, "Success", "Custom editor command cleared.")
+            show_toast(self, "Custom editor cleared")
 
     def closeEvent(self, event):
         """Handle window close event"""
