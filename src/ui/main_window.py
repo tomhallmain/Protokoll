@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                             QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QFrame, QMenu,
                             QToolButton, QStyle)
 from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QFont, QPalette, QColor, QFontMetrics
+from PyQt6.QtGui import QFont, QPalette, QColor, QFontMetrics, QTextCursor
 
 from ..internal.tracker import Tracker
 from ..utils.config_manager import ConfigManager
@@ -505,8 +505,16 @@ class MainWindow(QMainWindow):
             return
         
         # Show file information header
+        last_modified = file_info.get("last_modified")
+        updated_today_note = ""
+        if last_modified is not None:
+            try:
+                if datetime.fromtimestamp(last_modified).date() == datetime.now().date():
+                    updated_today_note = " | Updated today"
+            except (OSError, ValueError):
+                pass
         self.append_styled_content(f"=== {os.path.basename(file_path)} ===", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
-        self.append_styled_content(f"Size: {file_info['size_human']} | Lines: {file_info.get('total_lines', 'Unknown')}", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+        self.append_styled_content(f"Size: {file_info['size_human']} | Lines: {file_info.get('total_lines', 'Unknown')}{updated_today_note}", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
         
         if file_info.get("is_compressed", False):
             self.append_styled_content("📦 Compressed file detected", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
@@ -528,7 +536,8 @@ class MainWindow(QMainWindow):
         # Determine how to handle the content based on its characteristics
         content_length = len(content)
         line_count = content.count('\n') + 1
-        
+        header_had_unknown_lines = file_info.get("total_lines") is None
+
         if content_length > 1000000:  # Very large file (>1MB)
             # Case 1: Multi-lined sections, very long file - use chunks
             if line_count > 100:  # Multiple lines
@@ -540,8 +549,36 @@ class MainWindow(QMainWindow):
             # Case 3: Single append for reasonable length files
             formatted_content = ThemeManager.convert_ansi_to_html(content)
             self.log_viewer.append(formatted_content)
-        
+
         self.log_viewer.append("\n")
+
+        if header_had_unknown_lines:
+            self._update_header_line_count(line_count, file_path, file_info["size_human"], updated_today_note)
+
+    def _update_header_line_count(self, line_count: int, file_path: str = None, size_human: str = None, updated_today_note: str = "") -> None:
+        """Replace 'Lines: Unknown' in the header with the actual line count, then append the same header at the end."""
+        vbar = self.log_viewer.verticalScrollBar()
+        scroll_value = vbar.value()
+        at_bottom = scroll_value >= vbar.maximum() - 1
+
+        cursor = self.log_viewer.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.Start)
+        self.log_viewer.setTextCursor(cursor)
+        if self.log_viewer.find("Lines: Unknown"):
+            cursor = self.log_viewer.textCursor()
+            cursor.insertText(f"Lines: {line_count:,}")
+
+        if file_path is not None and size_human is not None:
+            cursor.movePosition(QTextCursor.MoveOperation.End)
+            self.log_viewer.setTextCursor(cursor)
+            self.log_viewer.append("\n")
+            self.append_styled_content(f"=== {os.path.basename(file_path)} ===", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+            self.append_styled_content(f"Size: {size_human} | Lines: {line_count:,}{updated_today_note}", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+
+        if at_bottom:
+            vbar.setValue(vbar.maximum())
+        else:
+            vbar.setValue(scroll_value)
     
     def clear_search_and_reload(self):
         """Clear the search bar and reload the current log file if one is selected."""
