@@ -1,4 +1,4 @@
-# Log Tracker
+# Protokoll - Log File Tracker and Reader
 
 A desktop application for managing and viewing log files across different projects. This application allows you to:
 

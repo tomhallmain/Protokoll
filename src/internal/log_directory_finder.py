@@ -62,7 +62,6 @@ class LogDirectoryFinder:
         'site-packages',
         'lib',
         'include',
-        'share',
         'doc',
         'docs',
         'test',
@@ -193,7 +192,10 @@ class LogDirectoryFinder:
             app_data_dirs.extend([
                 os.path.expanduser('~/Library/Application Support'),
                 os.path.expanduser('~/Library/Logs'),
-                os.path.expanduser('~/Library/Caches')
+                os.path.expanduser('~/Library/Caches'),
+                os.path.expanduser('~/.config'),
+                os.path.expanduser('~/.local/share'),
+                os.path.expanduser('~/.cache'),
             ])
         else:  # Linux and other Unix-like
             app_data_dirs.extend([
@@ -320,6 +322,8 @@ class LogDirectoryFinder:
                     else:
                         logger.info(f"No log files found in potential match: {root}")
 
+        logger.info(f"Skipped {dirs_skipped} directories.")
+
         # Return results
         logger.info(f"Found {len(potential_matches)} potential matches")
         return {
@@ -336,14 +340,17 @@ class LogDirectoryFinder:
             
             # Skip based on depth
             if current_depth > max_depth:
+                # logger.info("Skipped directory due to max depth condition: " + dir_path)
                 return True
             
             # Skip hidden/system directories
-            if any(part.startswith('.') for part in dir_path.split(os.sep)):
+            if any(part not in (".cache", ".config", ".local") and part.startswith('.') for part in dir_path.split(os.sep)):
+                # logger.info("Skipped directory due to hidden condition: " + dir_path)
                 return True
                 
             # Skip special directories
             if any(skip_dir in dir_path.split(os.sep) for skip_dir in LogDirectoryFinder.SKIP_DIRS):
+                # logger.info("Skipped directory due to user spec: " + dir_path)
                 return True
                 
             return False
