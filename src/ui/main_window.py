@@ -152,6 +152,14 @@ class MainWindow(QMainWindow):
         self.limit_to_line_start.setToolTip("Match only at start of log line (after level: INFO, ERROR, WARNING, DEBUG, TRACE)")
         self.limit_to_line_start.toggled.connect(self._save_search_settings)
         
+        self.search_all_files = QToolButton()
+        self.search_all_files.setObjectName("searchAllFiles")
+        self.search_all_files.setCheckable(True)
+        self.search_all_files.setChecked(self.config_manager.get("search.all_files", False))
+        self.search_all_files.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_DirIcon))
+        self.search_all_files.setToolTip("Search all log files in the tracker (not just the selected file)")
+        self.search_all_files.toggled.connect(self._save_search_settings)
+        
         # Add Clear button
         clear_btn = QPushButton("Clear")
         clear_btn.setObjectName("clearButton")
@@ -169,6 +177,7 @@ class MainWindow(QMainWindow):
         search_layout.addWidget(self.show_line_numbers)
         search_layout.addWidget(self.use_regex)
         search_layout.addWidget(self.limit_to_line_start)
+        search_layout.addWidget(self.search_all_files)
         
         # Open in Editor button with context menu
         open_editor_btn = QPushButton("Open in Editor")
@@ -260,6 +269,7 @@ class MainWindow(QMainWindow):
         self.config_manager.set("search.show_line_numbers", self.show_line_numbers.isChecked())
         self.config_manager.set("search.use_regex", self.use_regex.isChecked())
         self.config_manager.set("search.limit_to_line_start", self.limit_to_line_start.isChecked())
+        self.config_manager.set("search.all_files", self.search_all_files.isChecked())
     
     def load_trackers(self):
         """Load and display all available trackers"""
@@ -616,8 +626,96 @@ class MainWindow(QMainWindow):
             # No previous selection, but we have files - select the first one
             self.files_list.setCurrentRow(0)
 
+    def _prepare_search_pattern(self, search_text):
+        """Return (search_re, search_text_lower, error_message)."""
+        if self.use_regex.isChecked():
+            try:
+                return re.compile(search_text, re.IGNORECASE), None, None
+            except re.error:
+                return None, None, f"Invalid regular expression: {search_text}"
+        return None, search_text.lower(), None
+
+    def _line_matches_search(self, line, search_re, search_text_lower, log_level_pattern):
+        limit_to_line_start = self.limit_to_line_start.isChecked()
+        use_regex = self.use_regex.isChecked()
+        if limit_to_line_start:
+            search_in = log_level_pattern.sub("", line, count=1)
+            if use_regex:
+                return search_re.match(search_in) is not None
+            return search_in.lower().startswith(search_text_lower)
+        if use_regex:
+            return bool(search_re.search(line))
+        return search_text_lower in line.lower()
+
+    def _find_matches_in_content(self, content, search_re, search_text_lower, log_level_pattern):
+        matches = []
+        for line_num, line in enumerate(content.split('\n'), 1):
+            if self._line_matches_search(line, search_re, search_text_lower, log_level_pattern):
+                matches.append((line_num, line.rstrip('\n')))
+        return matches
+
+    def _find_matches_in_file(self, log_file_path, search_re, search_text_lower, log_level_pattern):
+        is_valid, reason, _ = self.file_handler.validate_file_for_viewing(log_file_path)
+        if not is_valid:
+            return None, ("validation", reason)
+        success, content, read_info = self.file_handler.read_file_safe(log_file_path)
+        if not success:
+            return None, ("read", read_info.get('error', 'Unknown error'))
+        return self._find_matches_in_content(content, search_re, search_text_lower, log_level_pattern), None
+
+    def _append_search_match(self, line_num, line_content):
+        formatted_line = ThemeManager.convert_ansi_to_html(line_content)
+        if self.show_line_numbers.isChecked():
+            self.append_styled_content(f"{line_num}: ", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+            self.log_viewer.append(formatted_line)
+        else:
+            self.log_viewer.append(formatted_line)
+
+    def _search_scope_description(self):
+        mode = "regex" if self.use_regex.isChecked() else "plain text"
+        scope = "limit to line start" if self.limit_to_line_start.isChecked() else "full line"
+        return mode, scope
+
+    def _display_single_file_search_results(self, log_file_path, matches, search_text):
+        self.log_viewer.clear()
+        self.append_styled_content(
+            f"File: {os.path.basename(log_file_path)} Found {len(matches)} matches",
+            color=ThemeManager.DARK_THEME["log_viewer"]["info"],
+        )
+        self.log_viewer.append("\n")
+        for line_num, line_content in matches:
+            self._append_search_match(line_num, line_content)
+
+    def _display_all_files_search_results(self, file_results, skipped_files, search_text, files_searched):
+        total_matches = sum(len(matches) for _, matches in file_results)
+        files_with_matches = len(file_results)
+        self.log_viewer.clear()
+        self.append_styled_content(
+            f"Found {total_matches} matches in {files_with_matches} file(s) (searched {files_searched} file(s))",
+            color=ThemeManager.DARK_THEME["log_viewer"]["info"],
+        )
+        if skipped_files:
+            self.append_styled_content(
+                f"Skipped {len(skipped_files)} file(s):",
+                color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
+            )
+            for file_path, reason in skipped_files:
+                self.append_styled_content(
+                    f"  • {os.path.basename(file_path)}: {reason}",
+                    color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
+                )
+        self.log_viewer.append("\n")
+        for file_path, matches in file_results:
+            self.append_styled_content(
+                f"=== {os.path.basename(file_path)} ({len(matches)} match(es)) ===",
+                color=ThemeManager.DARK_THEME["log_viewer"]["info"],
+            )
+            for line_num, line_content in matches:
+                self._append_search_match(line_num, line_content)
+            self.log_viewer.append("")
+
     def search_logs(self):
-        """Search through the current log file"""
+        """Search through the current log file or all tracker log files."""
         if not self.current_tracker:
             return
         
@@ -629,90 +727,92 @@ class MainWindow(QMainWindow):
                 self.display_log_file(log_file_path)
             return
 
-        # Get the currently selected log file
+        search_re, search_text_lower, error_message = self._prepare_search_pattern(search_text)
+        if error_message:
+            self.log_viewer.clear()
+            self.append_styled_content(error_message, color=ThemeManager.DARK_THEME["log_viewer"]["error"])
+            return
+
+        log_level_pattern = re.compile(r"^.*?(INFO|ERROR|WARNING|DEBUG|TRACE)\W*", re.IGNORECASE)
+
+        if self.search_all_files.isChecked():
+            log_files = self.current_tracker.get_log_files()
+            if not log_files:
+                self.log_viewer.clear()
+                self.append_styled_content(
+                    "No log files found in the tracked directories.",
+                    color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
+                )
+                return
+
+            file_results = []
+            skipped_files = []
+            for log_file in log_files:
+                log_file_path = log_file["path"]
+                matches, error = self._find_matches_in_file(
+                    log_file_path, search_re, search_text_lower, log_level_pattern
+                )
+                if error:
+                    _, reason = error
+                    skipped_files.append((log_file_path, reason))
+                    continue
+                if matches:
+                    file_results.append((log_file_path, matches))
+
+            if file_results:
+                self._display_all_files_search_results(
+                    file_results, skipped_files, search_text, len(log_files)
+                )
+            else:
+                self.log_viewer.clear()
+                mode, scope = self._search_scope_description()
+                self.append_styled_content(
+                    f"No matches found for '{search_text}' across {len(log_files)} file(s) ({mode}, {scope})",
+                    color=ThemeManager.DARK_THEME["log_viewer"]["error"],
+                )
+                if skipped_files:
+                    self.append_styled_content(
+                        f"Skipped {len(skipped_files)} file(s):",
+                        color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
+                    )
+                    for file_path, reason in skipped_files:
+                        self.append_styled_content(
+                            f"  • {os.path.basename(file_path)}: {reason}",
+                            color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
+                        )
+            return
+
         log_file_path = self.get_current_log_file_path()
         if not log_file_path:
             return
-        
-        # Validate file before searching
-        is_valid, reason, file_info = self.file_handler.validate_file_for_viewing(log_file_path)
-        
-        if not is_valid:
-            self.log_viewer.clear()
-            self.append_styled_content(f"⚠️  Cannot search file: {reason}", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
-            return
-        
-        # Read file content safely
-        success, content, read_info = self.file_handler.read_file_safe(log_file_path)
-        
-        if not success:
-            self.log_viewer.clear()
-            self.append_styled_content(f"❌ Error reading file: {read_info.get('error', 'Unknown error')}", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
-            return
-        
-        # Search through the content
-        lines = content.split('\n')
-        matches = []
-        use_regex = self.use_regex.isChecked()
-        limit_to_line_start = self.limit_to_line_start.isChecked()
-        # Strip optional timestamp + level so we search only in the message part; full line is still displayed.
-        log_level_pattern = re.compile(r"^.*?(INFO|ERROR|WARNING|DEBUG|TRACE)\W*", re.IGNORECASE)
 
-        if use_regex:
-            try:
-                search_re = re.compile(search_text, re.IGNORECASE)
-            except re.error:
-                self.log_viewer.clear()
-                self.append_styled_content(f"Invalid regular expression: {search_text}", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
-                return
-        else:
-            search_text_lower = search_text.lower()
-
-        for i, line in enumerate(lines, 1):
-            if limit_to_line_start:
-                search_in = log_level_pattern.sub("", line, count=1)
-                if use_regex:
-                    matched = search_re.match(search_in) is not None
-                else:
-                    matched = search_in.lower().startswith(search_text_lower)
+        matches, error = self._find_matches_in_file(
+            log_file_path, search_re, search_text_lower, log_level_pattern
+        )
+        if error:
+            self.log_viewer.clear()
+            error_kind, message = error
+            if error_kind == "validation":
+                self.append_styled_content(
+                    f"⚠️  Cannot search file: {message}",
+                    color=ThemeManager.DARK_THEME["log_viewer"]["error"],
+                )
             else:
-                if use_regex:
-                    matched = bool(search_re.search(line))
-                else:
-                    matched = search_text_lower in line.lower()
-            if matched:
-                # Convert ANSI color codes to HTML formatting
-                formatted_line = ThemeManager.convert_ansi_to_html(line.rstrip('\n'))
-                if self.show_line_numbers.isChecked():
-                    line_number = f"{i}: "
-                    matches.append(f"{line_number}{formatted_line}")
-                else:
-                    matches.append(formatted_line)
-        
+                self.append_styled_content(
+                    f"❌ Error reading file: {message}",
+                    color=ThemeManager.DARK_THEME["log_viewer"]["error"],
+                )
+            return
+
         if matches:
-            # Show results in the log viewer
-            self.log_viewer.clear()
-            self.append_styled_content(f"File: {os.path.basename(log_file_path)} Found {len(matches)} matches", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
-            self.log_viewer.append("\n")
-            
-            # Process matches to add line number styling
-            for match in matches:
-                if self.show_line_numbers.isChecked() and ": " in match:
-                    # Split line number from content
-                    parts = match.split(": ", 1)
-                    if len(parts) == 2:
-                        line_num, content = parts
-                        self.append_styled_content(f"{line_num}: ", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
-                        self.log_viewer.append(content)
-                    else:
-                        self.log_viewer.append(match)
-                else:
-                    self.log_viewer.append(match)
+            self._display_single_file_search_results(log_file_path, matches, search_text)
         else:
             self.log_viewer.clear()
-            mode = "regex" if use_regex else "plain text"
-            scope = "limit to line start" if limit_to_line_start else "full line"
-            self.append_styled_content(f"No matches found for '{search_text}' ({mode}, {scope})", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
+            mode, scope = self._search_scope_description()
+            self.append_styled_content(
+                f"No matches found for '{search_text}' ({mode}, {scope})",
+                color=ThemeManager.DARK_THEME["log_viewer"]["error"],
+            )
     
     def edit_tracker(self, item):
         """Edit the selected tracker"""
