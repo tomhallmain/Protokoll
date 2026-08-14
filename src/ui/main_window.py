@@ -5,7 +5,7 @@ import re
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                             QPushButton, QLabel, QLineEdit, QTextEdit,
                             QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QFrame, QMenu,
-                            QToolButton, QStyle)
+                            QToolButton, QStyle, QSpinBox)
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont, QPalette, QColor, QFontMetrics, QTextCursor
 
@@ -159,7 +159,23 @@ class MainWindow(QMainWindow):
         self.search_all_files.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_DirIcon))
         self.search_all_files.setToolTip("Search all log files in the tracker (not just the selected file)")
         self.search_all_files.toggled.connect(self._save_search_settings)
-        
+
+        self.context_before = QSpinBox()
+        self.context_before.setObjectName("contextBefore")
+        self.context_before.setRange(0, 50)
+        self.context_before.setValue(self.config_manager.get("search.context_before", 0))
+        self.context_before.setPrefix("B:")
+        self.context_before.setToolTip("Lines of context to show before each match")
+        self.context_before.valueChanged.connect(self._save_search_settings)
+
+        self.context_after = QSpinBox()
+        self.context_after.setObjectName("contextAfter")
+        self.context_after.setRange(0, 50)
+        self.context_after.setValue(self.config_manager.get("search.context_after", 0))
+        self.context_after.setPrefix("A:")
+        self.context_after.setToolTip("Lines of context to show after each match")
+        self.context_after.valueChanged.connect(self._save_search_settings)
+
         # Add Clear button
         clear_btn = QPushButton("Clear")
         clear_btn.setObjectName("clearButton")
@@ -178,6 +194,8 @@ class MainWindow(QMainWindow):
         search_layout.addWidget(self.use_regex)
         search_layout.addWidget(self.limit_to_line_start)
         search_layout.addWidget(self.search_all_files)
+        search_layout.addWidget(self.context_before)
+        search_layout.addWidget(self.context_after)
         
         # Open in Editor button with context menu
         open_editor_btn = QPushButton("Open in Editor")
@@ -270,6 +288,8 @@ class MainWindow(QMainWindow):
         self.config_manager.set("search.use_regex", self.use_regex.isChecked())
         self.config_manager.set("search.limit_to_line_start", self.limit_to_line_start.isChecked())
         self.config_manager.set("search.all_files", self.search_all_files.isChecked())
+        self.config_manager.set("search.context_before", self.context_before.value())
+        self.config_manager.set("search.context_after", self.context_after.value())
     
     def load_trackers(self):
         """Load and display all available trackers"""
@@ -420,8 +440,8 @@ class MainWindow(QMainWindow):
         self.display_log_file(log_file_path)
         self.update_window_title()
 
-    def append_styled_content(self, text, color=None, bold=False, background_color=None):
-        """Append content to the log viewer with optional styling"""
+    def _styled_span(self, text, color=None, bold=False, background_color=None):
+        """Build an HTML span for `text`, or return it unchanged if no styling applies."""
         style_parts = []
         if color:
             style_parts.append(f"color: {color}")
@@ -429,12 +449,15 @@ class MainWindow(QMainWindow):
             style_parts.append(f"background-color: {background_color}")
         if bold:
             style_parts.append("font-weight: bold")
-        
+
         if style_parts:
             style = "; ".join(style_parts)
-            self.log_viewer.append(f'<span style="{style}">{text}</span>')
-        else:
-            self.log_viewer.append(text)
+            return f'<span style="{style}">{text}</span>'
+        return text
+
+    def append_styled_content(self, text, color=None, bold=False, background_color=None):
+        """Append content to the log viewer with optional styling"""
+        self.log_viewer.append(self._styled_span(text, color=color, bold=bold, background_color=background_color))
 
     def _load_single_long_line(self, content):
         """Handle a single very long line (e.g., minified JSON) by truncating"""
@@ -647,12 +670,35 @@ class MainWindow(QMainWindow):
             return bool(search_re.search(line))
         return search_text_lower in line.lower()
 
-    def _find_matches_in_content(self, content, search_re, search_text_lower, log_level_pattern):
-        matches = []
-        for line_num, line in enumerate(content.split('\n'), 1):
-            if self._line_matches_search(line, search_re, search_text_lower, log_level_pattern):
-                matches.append((line_num, line.rstrip('\n')))
-        return matches
+    def _find_matches_in_content(self, content, search_re, search_text_lower, log_level_pattern,
+                                  context_before=0, context_after=0):
+        """
+        Return matches grouped into blocks of (line_num, line_content, is_match), with
+        context_before/context_after lines pulled in around each match. Overlapping or
+        adjacent context windows are merged into a single contiguous block.
+        """
+        lines = content.split('\n')
+        match_indices = [
+            i for i, line in enumerate(lines)
+            if self._line_matches_search(line, search_re, search_text_lower, log_level_pattern)
+        ]
+        if not match_indices:
+            return []
+
+        ranges = []
+        for i in match_indices:
+            start = max(0, i - context_before)
+            end = min(len(lines) - 1, i + context_after)
+            if ranges and start <= ranges[-1][1] + 1:
+                ranges[-1] = (ranges[-1][0], max(ranges[-1][1], end))
+            else:
+                ranges.append((start, end))
+
+        match_index_set = set(match_indices)
+        return [
+            [(idx + 1, lines[idx].rstrip('\n'), idx in match_index_set) for idx in range(start, end + 1)]
+            for start, end in ranges
+        ]
 
     def _find_matches_in_file(self, log_file_path, search_re, search_text_lower, log_level_pattern):
         is_valid, reason, _ = self.file_handler.validate_file_for_viewing(log_file_path)
@@ -661,13 +707,32 @@ class MainWindow(QMainWindow):
         success, content, read_info = self.file_handler.read_file_safe(log_file_path)
         if not success:
             return None, ("read", read_info.get('error', 'Unknown error'))
-        return self._find_matches_in_content(content, search_re, search_text_lower, log_level_pattern), None
+        blocks = self._find_matches_in_content(
+            content, search_re, search_text_lower, log_level_pattern,
+            self.context_before.value(), self.context_after.value()
+        )
+        return blocks, None
 
-    def _append_search_match(self, line_num, line_content):
+    def _count_matches(self, blocks):
+        return sum(1 for block in blocks for _, _, is_match in block if is_match)
+
+    def _display_search_blocks(self, blocks):
+        """Render match blocks, with a separator between non-adjacent blocks."""
+        for i, block in enumerate(blocks):
+            if i > 0:
+                self.append_styled_content("--", color=ThemeManager.DARK_THEME["log_viewer"]["text"])
+            for line_num, line_content, is_match in block:
+                self._append_search_match(line_num, line_content, is_match)
+
+    def _append_search_match(self, line_num, line_content, is_match=True):
         formatted_line = ThemeManager.convert_ansi_to_html(line_content)
         if self.show_line_numbers.isChecked():
-            self.append_styled_content(f"{line_num}: ", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
-            self.log_viewer.append(formatted_line)
+            number_color = (ThemeManager.DARK_THEME["log_viewer"]["info"] if is_match
+                             else ThemeManager.DARK_THEME["log_viewer"]["text"])
+            number_span = self._styled_span(f"{line_num}: ", color=number_color)
+            # Combined into one append() call so the number sits to the left of the
+            # line on the same row, instead of on its own paragraph above it.
+            self.log_viewer.append(number_span + formatted_line)
         else:
             self.log_viewer.append(formatted_line)
 
@@ -676,18 +741,17 @@ class MainWindow(QMainWindow):
         scope = "limit to line start" if self.limit_to_line_start.isChecked() else "full line"
         return mode, scope
 
-    def _display_single_file_search_results(self, log_file_path, matches, search_text):
+    def _display_single_file_search_results(self, log_file_path, blocks, search_text):
         self.log_viewer.clear()
         self.append_styled_content(
-            f"File: {os.path.basename(log_file_path)} Found {len(matches)} matches",
+            f"File: {os.path.basename(log_file_path)} Found {self._count_matches(blocks)} matches",
             color=ThemeManager.DARK_THEME["log_viewer"]["info"],
         )
         self.log_viewer.append("\n")
-        for line_num, line_content in matches:
-            self._append_search_match(line_num, line_content)
+        self._display_search_blocks(blocks)
 
     def _display_all_files_search_results(self, file_results, skipped_files, search_text, files_searched):
-        total_matches = sum(len(matches) for _, matches in file_results)
+        total_matches = sum(self._count_matches(blocks) for _, blocks in file_results)
         files_with_matches = len(file_results)
         self.log_viewer.clear()
         self.append_styled_content(
@@ -705,13 +769,12 @@ class MainWindow(QMainWindow):
                     color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
                 )
         self.log_viewer.append("\n")
-        for file_path, matches in file_results:
+        for file_path, blocks in file_results:
             self.append_styled_content(
-                f"=== {os.path.basename(file_path)} ({len(matches)} match(es)) ===",
+                f"=== {os.path.basename(file_path)} ({self._count_matches(blocks)} match(es)) ===",
                 color=ThemeManager.DARK_THEME["log_viewer"]["info"],
             )
-            for line_num, line_content in matches:
-                self._append_search_match(line_num, line_content)
+            self._display_search_blocks(blocks)
             self.log_viewer.append("")
 
     def search_logs(self):

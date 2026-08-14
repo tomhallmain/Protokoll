@@ -42,7 +42,9 @@ class ConfigManager:
             "search": {
                 "show_line_numbers": True,
                 "use_regex": False,
-                "limit_to_line_start": False
+                "limit_to_line_start": False,
+                "context_before": 0,
+                "context_after": 0
             }
         }
         
