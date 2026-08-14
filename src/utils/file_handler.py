@@ -41,7 +41,12 @@ class FileHandler:
     
     # Compression extensions
     COMPRESSED_EXTENSIONS = ['.gz', '.bz2', '.zip']
-    
+
+    # Naming convention for logs encrypted with StreamingLogCipher (e.g. "app.log.enc").
+    # Ciphertext looks binary to the printable-ratio heuristic below, so files matching
+    # this extension skip binary detection instead of being rejected as corrupted.
+    ENCRYPTED_LOG_EXTENSION = '.enc'
+
     # File size limits (100MB max, 10MB warning)
     MAX_FILE_SIZE = 100 * 1024 * 1024
     WARN_FILE_SIZE = 10 * 1024 * 1024
@@ -56,12 +61,17 @@ class FileHandler:
     @classmethod
     def is_log_file(cls, file_path: str) -> bool:
         """Check if file has a log-like extension."""
-        return bool(Path(file_path).suffix.lower() in cls.LOG_EXTENSIONS)
- 
+        return bool(Path(file_path).suffix.lower() in cls.LOG_EXTENSIONS) or cls.is_encrypted_log(file_path)
+
     @classmethod
     def is_compressed(cls, file_path: str) -> bool:
         """Check if file is compressed."""
         return bool(Path(file_path).suffix.lower() in cls.COMPRESSED_EXTENSIONS)
+
+    @classmethod
+    def is_encrypted_log(cls, file_path: str) -> bool:
+        """Check if file follows the encrypted-log naming convention (e.g. 'app.log.enc')."""
+        return Path(file_path).suffix.lower() == cls.ENCRYPTED_LOG_EXTENSION
     
     def _lock_file(self, file_obj):
         """Apply file locking appropriate for the OS."""
@@ -102,20 +112,24 @@ class FileHandler:
                 "is_file": path.is_file(),
                 "is_compressed": self.is_compressed(file_path),
                 "is_log_file": self.is_log_file(file_path),
+                "is_encrypted": self.is_encrypted_log(file_path),
                 "extension": path.suffix.lower(),
                 "last_modified": stat.st_mtime,
                 "readable": os.access(file_path, os.R_OK),
                 "warnings": []
             }
-            
+
             # Size warnings
             if file_size > self.MAX_FILE_SIZE:
                 info["warnings"].append(f"File too large ({info['size_human']})")
             elif file_size > self.WARN_FILE_SIZE:
                 info["warnings"].append(f"Large file ({info['size_human']})")
-            
-            # Binary detection
-            if info["is_file"] and info["readable"]:
+
+            # Binary detection - skipped for encrypted logs, since ciphertext always
+            # looks binary to the printable-ratio heuristic; decryption happens elsewhere.
+            if info["is_encrypted"]:
+                info["is_binary"] = False
+            elif info["is_file"] and info["readable"]:
                 try:
                     with open(file_path, 'rb') as f:
                         sample = f.read(self.DETECTION_SAMPLE_SIZE)
@@ -193,6 +207,11 @@ class FileHandler:
             return False, "", {"error": "File may contain corrupted data or non-text content", "warnings": file_info["warnings"]}
         
         try:
+            # Encrypted logs are handled by the caller (decryption needs the app's
+            # service_name/app_identifier); hand back the raw ciphertext untouched.
+            if file_info.get("is_encrypted", False):
+                with open(file_path, 'rb') as f:
+                    return True, f.read(), file_info
             # Handle compressed files
             if file_info["is_compressed"]:
                 content = self._read_compressed_file(file_path)

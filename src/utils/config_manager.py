@@ -4,6 +4,11 @@ from pathlib import Path
 from typing import Any, Dict
 
 from ..utils.logging_setup import get_logger
+from ..utils.encryptor import (
+    PassphraseManager,
+    symmetric_encrypt_data_to_file,
+    symmetric_decrypt_data_from_file,
+)
 
 logger = get_logger('utils.config_manager')
 
@@ -99,22 +104,37 @@ class ConfigManager:
         """Get path for a cache file"""
         return self.cache_dir / f"{name}.cache"
     
+    def _cache_passphrase(self) -> bytes:
+        """Non-interactive, keyring-backed passphrase used to encrypt this app's cache at rest."""
+        return PassphraseManager.get_passphrase(self.app_name, "cache").encode()
+
     def save_cache(self, name: str, data: Any) -> None:
-        """Save data to cache"""
+        """Save data to cache, encrypted at rest (the cache can hold key-access data for tracked apps)"""
         cache_file = self.get_cache_path(name)
         try:
-            with open(cache_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f)
+            payload = json.dumps(data).encode('utf-8')
+            symmetric_encrypt_data_to_file(payload, str(cache_file), self._cache_passphrase())
         except Exception as e:
             logger.error(f"Error saving cache {name}: {e}")
-    
+
     def load_cache(self, name: str, default: Any = None) -> Any:
-        """Load data from cache"""
+        """Load and decrypt data from cache, migrating any pre-encryption plaintext cache found on disk"""
         cache_file = self.get_cache_path(name)
-        if cache_file.exists():
-            try:
-                with open(cache_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception as e:
-                logger.error(f"Error loading cache {name}: {e}")
+        if not cache_file.exists():
+            return default
+
+        try:
+            payload = symmetric_decrypt_data_from_file(str(cache_file), self._cache_passphrase())
+            return json.loads(payload.decode('utf-8'))
+        except Exception:
+            pass  # not necessarily fatal - may be a legacy plaintext cache written before encryption was added
+
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            logger.info(f"Migrating legacy plaintext cache '{name}' to encrypted storage")
+            self.save_cache(name, data)
+            return data
+        except Exception as e:
+            logger.error(f"Error loading cache {name}: {e}")
         return default 
