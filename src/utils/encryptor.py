@@ -937,19 +937,15 @@ class PersonalStandardEncryptor(BaseEncryptor):
 
 class StreamingLogCipher:
     """
-    Record-oriented AES-256-GCM cipher for data that is appended to over time,
-    such as a log file that stays open and grows for the life of a process.
+    Record-oriented AES-256-GCM cipher for data appended to over time (e.g. a log
+    file that stays open and grows for the life of a process). Unlike
+    BaseEncryptor/SymmetricEncryptor, which encrypt an entire buffer as one
+    nonce/tag pair, this derives one persistent key per (service_name,
+    app_identifier) via PassphraseManager and encrypts each record with its own
+    nonce, so records can be appended and decrypted one at a time without
+    touching the rest of the file.
 
-    BaseEncryptor/SymmetricEncryptor encrypt an entire buffer as one unit (one
-    nonce/tag per call), so the whole file has to be re-encrypted on every
-    write. This instead derives one persistent key per (service_name,
-    app_identifier) via the existing non-interactive PassphraseManager, and
-    encrypts each record independently with its own nonce, so records can be
-    appended one at a time and decrypted one at a time without touching the
-    rest of the file.
-
-    Wire format per record: 4-byte big-endian length, then
-    nonce(12) || tag(16) || ciphertext.
+    Wire format per record: 4-byte big-endian length, then nonce(12) || tag(16) || ciphertext.
     """
     NONCE_SIZE = 12
     TAG_SIZE = 16

@@ -33,7 +33,7 @@ class Utils:
         # u"\U000024C2-\U0001F251"  # Enclosed characters
         "]+", flags=re.UNICODE)
 
-    # List of valid non-emoji characters that are commonly used in filenames
+    # Non-emoji CJK/full-width punctuation characters allowed in filenames
     VALID_FILENAME_CHARS = {
         u"\uFF1A",  # Chinese colon (：)
         u"\uFF0C",  # Chinese comma (，)

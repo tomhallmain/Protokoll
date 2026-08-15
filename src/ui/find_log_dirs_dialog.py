@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                             QPushButton, QListWidget, QListWidgetItem,
                             QProgressBar, QMessageBox)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 
 from ..internal.log_directory_finder import LogDirectoryFinder
 from ..utils.theme_manager import ThemeManager
@@ -19,6 +19,10 @@ class DirectorySearchThread(QThread):
         super().__init__()
         self.app_name = app_name
         self.logger = get_logger('ui.find_log_dirs_dialog.search_thread')
+        # Clean itself up once done, independent of whatever the dialog that started it
+        # does in the meantime (closes, is destroyed, etc.) - see FindLogDirsDialog's
+        # closeEvent/reject/accept for why this thread isn't waited on or stopped from there.
+        self.finished.connect(self.deleteLater)
     
     def run(self):
         """Run the directory search."""
@@ -134,9 +138,13 @@ class FindLogDirsDialog(QDialog):
             "Search Error",
             error_message
         )
-        
-        # Close dialog
-        self.reject()
+
+        # Close dialog. Deferred to the next event loop iteration rather than calling
+        # reject() synchronously from here: this slot is itself invoked via a queued
+        # connection from the search thread's own signal, and calling QDialog.reject()
+        # directly within that delivery was observed to crash the whole process.
+        # QTimer.singleShot(0, ...) lets the current signal delivery unwind first.
+        QTimer.singleShot(0, self.reject)
     
     def on_search_complete(self, results: dict):
         """Handle search completion."""
@@ -181,26 +189,26 @@ class FindLogDirsDialog(QDialog):
         logger.info(f"Total selected directories: {len(selected)}")
         return selected
 
+    # closeEvent/reject/accept deliberately don't touch self.search_thread at all - no
+    # terminate(), no wait(). Both were tried and each crashed the whole process when
+    # reject() ran from within on_search_error, itself invoked by this same thread's own
+    # completion signal - touching the QThread object at all from that specific call chain
+    # reproduced the crash even via the documented-safe wait(). The thread is depth-limited
+    # (LogDirectoryFinder.MAX_ALLOWED_DEPTH) so it finishes quickly on its own regardless,
+    # cleans itself up via finished.connect(self.deleteLater) in its __init__, and Qt
+    # safely disconnects its signals once this dialog is destroyed.
+
     def closeEvent(self, event):
         """Handle dialog close event."""
-        logger.debug("Dialog closing, cleaning up search thread")
-        if self.search_thread and self.search_thread.isRunning():
-            self.search_thread.terminate()
-            self.search_thread.wait()
+        logger.debug("Dialog closing")
         super().closeEvent(event)
-    
+
     def reject(self):
         """Handle dialog rejection (Cancel button)."""
-        logger.debug("Dialog rejected, cleaning up search thread")
-        if self.search_thread and self.search_thread.isRunning():
-            self.search_thread.terminate()
-            self.search_thread.wait()
+        logger.debug("Dialog rejected")
         super().reject()
-    
+
     def accept(self):
         """Handle dialog acceptance (Add Selected button)."""
-        logger.debug("Dialog accepted, cleaning up search thread")
-        if self.search_thread and self.search_thread.isRunning():
-            self.search_thread.terminate()
-            self.search_thread.wait()
-        super().accept() 
+        logger.debug("Dialog accepted")
+        super().accept()

@@ -125,9 +125,12 @@ class FileHandler:
             elif file_size > self.WARN_FILE_SIZE:
                 info["warnings"].append(f"Large file ({info['size_human']})")
 
-            # Binary detection - skipped for encrypted logs, since ciphertext always
-            # looks binary to the printable-ratio heuristic; decryption happens elsewhere.
-            if info["is_encrypted"]:
+            # Binary detection - skipped for encrypted logs (ciphertext always looks binary
+            # to the printable-ratio heuristic; decryption happens elsewhere) and for
+            # compressed files (their raw, still-compressed bytes look binary too; the
+            # decompressed content is validated separately when it's actually decoded as
+            # text in _read_compressed_file/read_file_safe).
+            if info["is_encrypted"] or info["is_compressed"]:
                 info["is_binary"] = False
             elif info["is_file"] and info["readable"]:
                 try:

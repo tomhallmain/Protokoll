@@ -484,43 +484,24 @@ class MainWindow(QMainWindow):
         """Handle a large multi-line file by loading in chunks"""
         lines = content.split('\n')
         chunk_size = 500  # Process 500 lines at a time
-        total_chunks = (len(lines) + chunk_size - 1) // chunk_size
-        
-        # Show progress indicator
-        self.append_styled_content(f"Loading large log file (0/{total_chunks} chunks)...", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
-        QApplication.processEvents()
-        
+
+        # No in-document progress indicator here (deliberately): an earlier version tried
+        # to insert one and then update/remove it in place via cursor manipulation, which
+        # got corrupted by or never found again past the file-info header this method is
+        # always called after. Getting that right needs a live PyQt6 environment to verify
+        # against, which isn't available where this was last touched - periodic
+        # processEvents() calls below still keep the UI responsive during the load.
         for i in range(0, len(lines), chunk_size):
             chunk_lines = lines[i:i+chunk_size]
             chunk_content = '\n'.join(chunk_lines)
-            
+
             # Convert this chunk
             formatted_chunk = ThemeManager.convert_ansi_to_html(chunk_content)
             self.log_viewer.append(formatted_chunk)
-            
-            # Update progress indicator every 5 chunks
-            current_chunk = (i // chunk_size) + 1
-            if current_chunk % 5 == 0 or current_chunk == total_chunks:
-                # Remove old progress indicator
-                cursor = self.log_viewer.textCursor()
-                cursor.movePosition(cursor.MoveOperation.Start)
-                cursor.movePosition(cursor.MoveOperation.Down, cursor.MoveMode.KeepAnchor)
-                cursor.removeSelectedText()
-                cursor.deletePreviousChar()  # Remove the newline
-                
-                # Add updated progress indicator
-                self.append_styled_content(f"Loading large log file ({current_chunk}/{total_chunks} chunks)...", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
-            
+
             # Process events every few chunks to keep UI responsive
             if i % (chunk_size * 2) == 0:
                 QApplication.processEvents()
-        
-        # Remove final progress indicator
-        cursor = self.log_viewer.textCursor()
-        cursor.movePosition(cursor.MoveOperation.Start)
-        cursor.movePosition(cursor.MoveOperation.Down, cursor.MoveMode.KeepAnchor)
-        cursor.removeSelectedText()
-        cursor.deletePreviousChar()  # Remove the newline
 
     def display_log_file(self, file_path):
         """Display the selected log file"""
@@ -565,7 +546,18 @@ class MainWindow(QMainWindow):
             self.append_styled_content(f"❌ Error reading file: {read_info.get('error', 'Unknown error')}", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
             self.log_viewer.append("\n")
             return
-        
+
+        if file_info.get("is_encrypted", False):
+            # read_file_safe hands back raw ciphertext (bytes) for .enc files; there's no
+            # service_name/app_identifier wiring here yet to decrypt it, so show that plainly
+            # instead of feeding bytes into the str-only content handling below.
+            self.append_styled_content(
+                "🔒 This log is encrypted. Viewing encrypted logs isn't supported yet.",
+                color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
+            )
+            self.log_viewer.append("\n")
+            return
+
         # Determine how to handle the content based on its characteristics
         content_length = len(content)
         line_count = content.count('\n') + 1
