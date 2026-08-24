@@ -43,8 +43,11 @@ class ConfigManager:
                 "show_line_numbers": True,
                 "use_regex": False,
                 "limit_to_line_start": False,
+                "all_files": False,
                 "context_before": 0,
-                "context_after": 0
+                "context_after": 0,
+                "multiline_entries": True,
+                "max_entry_lines": 200
             }
         }
         

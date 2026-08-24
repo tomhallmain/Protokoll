@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont, QPalette, QColor, QFontMetrics, QTextCursor
 
+from ..internal import log_entries
 from ..internal.tracker import Tracker
 from ..utils.config_manager import ConfigManager
 from ..utils.theme_manager import ThemeManager
@@ -160,12 +161,21 @@ class MainWindow(QMainWindow):
         self.search_all_files.setToolTip("Search all log files in the tracker (not just the selected file)")
         self.search_all_files.toggled.connect(self._save_search_settings)
 
+        self.multiline_entries = QToolButton()
+        self.multiline_entries.setObjectName("multilineEntries")
+        self.multiline_entries.setCheckable(True)
+        self.multiline_entries.setChecked(self.config_manager.get("search.multiline_entries", True))
+        self.multiline_entries.setText("¶")
+        self.multiline_entries.setToolTip(
+            "Group multi-line logger calls (tracebacks, formatted messages) into single entries")
+        self.multiline_entries.toggled.connect(self._save_search_settings)
+
         self.context_before = QSpinBox()
         self.context_before.setObjectName("contextBefore")
         self.context_before.setRange(0, 50)
         self.context_before.setValue(self.config_manager.get("search.context_before", 0))
         self.context_before.setPrefix("B:")
-        self.context_before.setToolTip("Lines of context to show before each match")
+        self.context_before.setToolTip("Entries of context to show before each match")
         self.context_before.valueChanged.connect(self._save_search_settings)
 
         self.context_after = QSpinBox()
@@ -173,7 +183,7 @@ class MainWindow(QMainWindow):
         self.context_after.setRange(0, 50)
         self.context_after.setValue(self.config_manager.get("search.context_after", 0))
         self.context_after.setPrefix("A:")
-        self.context_after.setToolTip("Lines of context to show after each match")
+        self.context_after.setToolTip("Entries of context to show after each match")
         self.context_after.valueChanged.connect(self._save_search_settings)
 
         # Add Clear button
@@ -194,6 +204,7 @@ class MainWindow(QMainWindow):
         search_layout.addWidget(self.use_regex)
         search_layout.addWidget(self.limit_to_line_start)
         search_layout.addWidget(self.search_all_files)
+        search_layout.addWidget(self.multiline_entries)
         search_layout.addWidget(self.context_before)
         search_layout.addWidget(self.context_after)
         
@@ -288,6 +299,7 @@ class MainWindow(QMainWindow):
         self.config_manager.set("search.use_regex", self.use_regex.isChecked())
         self.config_manager.set("search.limit_to_line_start", self.limit_to_line_start.isChecked())
         self.config_manager.set("search.all_files", self.search_all_files.isChecked())
+        self.config_manager.set("search.multiline_entries", self.multiline_entries.isChecked())
         self.config_manager.set("search.context_before", self.context_before.value())
         self.config_manager.set("search.context_after", self.context_after.value())
     
@@ -650,75 +662,40 @@ class MainWindow(QMainWindow):
                 return None, None, f"Invalid regular expression: {search_text}"
         return None, search_text.lower(), None
 
-    def _line_matches_search(self, line, search_re, search_text_lower, log_level_pattern):
-        limit_to_line_start = self.limit_to_line_start.isChecked()
-        use_regex = self.use_regex.isChecked()
-        if limit_to_line_start:
-            search_in = log_level_pattern.sub("", line, count=1)
-            if use_regex:
-                return search_re.match(search_in) is not None
-            return search_in.lower().startswith(search_text_lower)
-        if use_regex:
-            return bool(search_re.search(line))
-        return search_text_lower in line.lower()
+    def _find_matches_in_content(self, content, search_re, search_text_lower):
+        """Read the current search toggles and hand the content to the search core."""
+        return log_entries.find_matches(
+            content, search_re, search_text_lower,
+            use_regex=self.use_regex.isChecked(),
+            limit_to_line_start=self.limit_to_line_start.isChecked(),
+            multiline=self.multiline_entries.isChecked(),
+            context_before=self.context_before.value(),
+            context_after=self.context_after.value(),
+            max_entry_lines=self.config_manager.get(
+                "search.max_entry_lines", log_entries.DEFAULT_MAX_ENTRY_LINES),
+        )
 
-    def _find_matches_in_content(self, content, search_re, search_text_lower, log_level_pattern,
-                                  context_before=0, context_after=0):
-        """
-        Return matches grouped into blocks of (line_num, line_content, is_match), with
-        context_before/context_after lines pulled in around each match. Overlapping or
-        adjacent context windows are merged into a single contiguous block.
-        """
-        lines = content.split('\n')
-        match_indices = [
-            i for i, line in enumerate(lines)
-            if self._line_matches_search(line, search_re, search_text_lower, log_level_pattern)
-        ]
-        if not match_indices:
-            return []
-
-        ranges = []
-        for i in match_indices:
-            start = max(0, i - context_before)
-            end = min(len(lines) - 1, i + context_after)
-            if ranges and start <= ranges[-1][1] + 1:
-                ranges[-1] = (ranges[-1][0], max(ranges[-1][1], end))
-            else:
-                ranges.append((start, end))
-
-        match_index_set = set(match_indices)
-        return [
-            [(idx + 1, lines[idx].rstrip('\n'), idx in match_index_set) for idx in range(start, end + 1)]
-            for start, end in ranges
-        ]
-
-    def _find_matches_in_file(self, log_file_path, search_re, search_text_lower, log_level_pattern):
+    def _find_matches_in_file(self, log_file_path, search_re, search_text_lower):
         is_valid, reason, _ = self.file_handler.validate_file_for_viewing(log_file_path)
         if not is_valid:
             return None, ("validation", reason)
         success, content, read_info = self.file_handler.read_file_safe(log_file_path)
         if not success:
             return None, ("read", read_info.get('error', 'Unknown error'))
-        blocks = self._find_matches_in_content(
-            content, search_re, search_text_lower, log_level_pattern,
-            self.context_before.value(), self.context_after.value()
-        )
-        return blocks, None
-
-    def _count_matches(self, blocks):
-        return sum(1 for block in blocks for _, _, is_match in block if is_match)
+        return self._find_matches_in_content(content, search_re, search_text_lower), None
 
     def _display_search_blocks(self, blocks):
         """Render match blocks, with a separator between non-adjacent blocks."""
         for i, block in enumerate(blocks):
             if i > 0:
                 self.append_styled_content("--", color=ThemeManager.DARK_THEME["log_viewer"]["text"])
-            for line_num, line_content, is_match in block:
-                self._append_search_match(line_num, line_content, is_match)
+            for entry in block:
+                for line_num, line_content, is_match in entry:
+                    self._append_search_match(line_num, line_content, is_match)
 
     def _append_search_match(self, line_num, line_content, is_match=True):
         formatted_line = ThemeManager.convert_ansi_to_html(line_content)
-        if self.show_line_numbers.isChecked():
+        if self.show_line_numbers.isChecked() and line_num is not None:
             number_color = (ThemeManager.DARK_THEME["log_viewer"]["info"] if is_match
                              else ThemeManager.DARK_THEME["log_viewer"]["text"])
             number_span = self._styled_span(f"{line_num}: ", color=number_color)
@@ -736,14 +713,14 @@ class MainWindow(QMainWindow):
     def _display_single_file_search_results(self, log_file_path, blocks, search_text):
         self.log_viewer.clear()
         self.append_styled_content(
-            f"File: {os.path.basename(log_file_path)} Found {self._count_matches(blocks)} matches",
+            f"File: {os.path.basename(log_file_path)} Found {log_entries.count_matches(blocks)} matches",
             color=ThemeManager.DARK_THEME["log_viewer"]["info"],
         )
         self.log_viewer.append("\n")
         self._display_search_blocks(blocks)
 
     def _display_all_files_search_results(self, file_results, skipped_files, search_text, files_searched):
-        total_matches = sum(self._count_matches(blocks) for _, blocks in file_results)
+        total_matches = sum(log_entries.count_matches(blocks) for _, blocks in file_results)
         files_with_matches = len(file_results)
         self.log_viewer.clear()
         self.append_styled_content(
@@ -763,7 +740,7 @@ class MainWindow(QMainWindow):
         self.log_viewer.append("\n")
         for file_path, blocks in file_results:
             self.append_styled_content(
-                f"=== {os.path.basename(file_path)} ({self._count_matches(blocks)} match(es)) ===",
+                f"=== {os.path.basename(file_path)} ({log_entries.count_matches(blocks)} match(es)) ===",
                 color=ThemeManager.DARK_THEME["log_viewer"]["info"],
             )
             self._display_search_blocks(blocks)
@@ -788,8 +765,6 @@ class MainWindow(QMainWindow):
             self.append_styled_content(error_message, color=ThemeManager.DARK_THEME["log_viewer"]["error"])
             return
 
-        log_level_pattern = re.compile(r"^.*?(INFO|ERROR|WARNING|DEBUG|TRACE)\W*", re.IGNORECASE)
-
         if self.search_all_files.isChecked():
             log_files = self.current_tracker.get_log_files()
             if not log_files:
@@ -805,7 +780,7 @@ class MainWindow(QMainWindow):
             for log_file in log_files:
                 log_file_path = log_file["path"]
                 matches, error = self._find_matches_in_file(
-                    log_file_path, search_re, search_text_lower, log_level_pattern
+                    log_file_path, search_re, search_text_lower
                 )
                 if error:
                     _, reason = error
@@ -842,7 +817,7 @@ class MainWindow(QMainWindow):
             return
 
         matches, error = self._find_matches_in_file(
-            log_file_path, search_re, search_text_lower, log_level_pattern
+            log_file_path, search_re, search_text_lower
         )
         if error:
             self.log_viewer.clear()

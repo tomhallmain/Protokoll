@@ -1,6 +1,16 @@
 """
 UI tests (pytest-qt) for MainWindow's search feature: plain-text/regex matching,
-before/after context-line grouping, and the "search all files" mode.
+multi-line entry grouping, before/after context grouping, and the "search all
+files" mode.
+
+These cover the wiring: toggles and config reaching the search core, and results
+reaching the log viewer. The entry-splitting and match-grouping rules themselves are
+pure functions tested directly in test/unit/test_log_entries.py.
+
+Fixtures here are deliberately log-shaped - every line carries a timestamp, so each
+one is its own logical entry and a test can isolate context/regex/line-number
+behaviour from entry grouping. Tests that exercise grouping itself use fixtures with
+genuine continuation lines.
 """
 
 import pytest
@@ -29,7 +39,12 @@ def _select_tracker_with_log_file(window, tmp_path, content, filename="app.log")
 
 
 def test_plain_text_search_finds_matching_line(qtbot, window, tmp_path):
-    _select_tracker_with_log_file(window, tmp_path, "first line\nERROR something broke\nlast line\n")
+    _select_tracker_with_log_file(
+        window, tmp_path,
+        "2026-08-24 10:00:01 INFO first line\n"
+        "2026-08-24 10:00:02 ERROR something broke\n"
+        "2026-08-24 10:00:03 INFO last line\n"
+    )
 
     window.search_edit.setText("error")
     window.search_logs()
@@ -53,7 +68,12 @@ def test_search_via_return_key(qtbot, window, tmp_path):
 
 
 def test_regex_search(qtbot, window, tmp_path):
-    _select_tracker_with_log_file(window, tmp_path, "code 200 ok\ncode 404 missing\ncode 500 error\n")
+    _select_tracker_with_log_file(
+        window, tmp_path,
+        "2026-08-24 10:00:01 INFO code 200 ok\n"
+        "2026-08-24 10:00:02 WARNING code 404 missing\n"
+        "2026-08-24 10:00:03 ERROR code 500 error\n"
+    )
 
     window.use_regex.setChecked(True)
     window.search_edit.setText(r"code (4|5)\d\d")
@@ -66,7 +86,14 @@ def test_regex_search(qtbot, window, tmp_path):
 
 
 def test_context_lines_pulls_in_surrounding_lines(qtbot, window, tmp_path):
-    _select_tracker_with_log_file(window, tmp_path, "line 1\nline 2\nERROR line 3\nline 4\nline 5\n")
+    _select_tracker_with_log_file(
+        window, tmp_path,
+        "2026-08-24 10:00:01 INFO line 1\n"
+        "2026-08-24 10:00:02 INFO line 2\n"
+        "2026-08-24 10:00:03 ERROR line 3\n"
+        "2026-08-24 10:00:04 INFO line 4\n"
+        "2026-08-24 10:00:05 INFO line 5\n"
+    )
 
     window.context_before.setValue(1)
     window.context_after.setValue(1)
@@ -83,7 +110,14 @@ def test_context_lines_pulls_in_surrounding_lines(qtbot, window, tmp_path):
 
 def test_context_lines_zero_matches_legacy_behavior(qtbot, window, tmp_path):
     """context_before/after default to 0, which must reproduce pre-context-lines output exactly."""
-    _select_tracker_with_log_file(window, tmp_path, "line 1\nline 2\nERROR line 3\nline 4\nline 5\n")
+    _select_tracker_with_log_file(
+        window, tmp_path,
+        "2026-08-24 10:00:01 INFO line 1\n"
+        "2026-08-24 10:00:02 INFO line 2\n"
+        "2026-08-24 10:00:03 ERROR line 3\n"
+        "2026-08-24 10:00:04 INFO line 4\n"
+        "2026-08-24 10:00:05 INFO line 5\n"
+    )
 
     window.search_edit.setText("error")
     window.search_logs()
@@ -136,7 +170,13 @@ def test_context_lines_merges_overlapping_windows_into_one_block(qtbot, window, 
     two separate ones with a '--' separator and/or duplicated lines between them."""
     _select_tracker_with_log_file(
         window, tmp_path,
-        "line0\nline1\nERROR at idx2\nline3\nERROR at idx4\nline5\nline6\n"
+        "2026-08-24 10:00:00 INFO line0\n"
+        "2026-08-24 10:00:01 INFO line1\n"
+        "2026-08-24 10:00:02 ERROR at idx2\n"
+        "2026-08-24 10:00:03 INFO line3\n"
+        "2026-08-24 10:00:04 ERROR at idx4\n"
+        "2026-08-24 10:00:05 INFO line5\n"
+        "2026-08-24 10:00:06 INFO line6\n"
     )
 
     window.context_before.setValue(1)
@@ -162,7 +202,14 @@ def test_context_lines_separates_non_adjacent_blocks(qtbot, window, tmp_path):
     two separate blocks with a '--' separator, and exclude the lines between them."""
     _select_tracker_with_log_file(
         window, tmp_path,
-        "line0\nERROR first\nline2\nline3\nline4\nline5\nERROR second\nline7\n"
+        "2026-08-24 10:00:00 INFO line0\n"
+        "2026-08-24 10:00:01 ERROR first\n"
+        "2026-08-24 10:00:02 INFO line2\n"
+        "2026-08-24 10:00:03 INFO line3\n"
+        "2026-08-24 10:00:04 INFO line4\n"
+        "2026-08-24 10:00:05 INFO line5\n"
+        "2026-08-24 10:00:06 ERROR second\n"
+        "2026-08-24 10:00:07 INFO line7\n"
     )
 
     window.context_before.setValue(1)
@@ -188,7 +235,11 @@ def test_context_before_clipped_at_file_start(qtbot, window, tmp_path):
     not wrap around to negative indices and pull in lines from the end of the file."""
     _select_tracker_with_log_file(
         window, tmp_path,
-        "ERROR first line\nmiddle1\nmiddle2\nmiddle3\nlast line\n"
+        "2026-08-24 10:00:01 ERROR first line\n"
+        "2026-08-24 10:00:02 INFO middle1\n"
+        "2026-08-24 10:00:03 INFO middle2\n"
+        "2026-08-24 10:00:04 INFO middle3\n"
+        "2026-08-24 10:00:05 INFO last line\n"
     )
 
     window.context_before.setValue(3)
@@ -207,7 +258,10 @@ def test_context_after_clipped_at_file_end(qtbot, window, tmp_path):
     last line, not raise an IndexError past the end of the content."""
     _select_tracker_with_log_file(
         window, tmp_path,
-        "first line\nmiddle1\nmiddle2\nERROR last line\n"
+        "2026-08-24 10:00:01 INFO first line\n"
+        "2026-08-24 10:00:02 INFO middle1\n"
+        "2026-08-24 10:00:03 INFO middle2\n"
+        "2026-08-24 10:00:04 ERROR last line\n"
     )
 
     window.context_before.setValue(0)
@@ -225,8 +279,16 @@ def test_context_after_clipped_at_file_end(qtbot, window, tmp_path):
 def test_search_all_files_applies_context_lines_per_file(qtbot, window, tmp_path):
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
-    (log_dir / "a.log").write_bytes(b"before a\nERROR in a\nafter a\n")
-    (log_dir / "b.log").write_bytes(b"before b\nERROR in b\nafter b\n")
+    (log_dir / "a.log").write_bytes(
+        b"2026-08-24 10:00:01 INFO before a\n"
+        b"2026-08-24 10:00:02 ERROR in a\n"
+        b"2026-08-24 10:00:03 INFO after a\n"
+    )
+    (log_dir / "b.log").write_bytes(
+        b"2026-08-24 10:00:01 INFO before b\n"
+        b"2026-08-24 10:00:02 ERROR in b\n"
+        b"2026-08-24 10:00:03 INFO after b\n"
+    )
 
     tracker = Tracker("my-app", config_manager=window.config_manager)
     tracker.add_log_directory(str(log_dir))
@@ -280,7 +342,12 @@ def test_limit_to_line_start_disabled_matches_anywhere_in_line(qtbot, window, tm
 def test_line_numbers_render_inline_with_content(qtbot, window, tmp_path):
     """Regression test: line numbers must render to the left of the matched content on
     the same line, not as a separate line above it (see main_window.py's _append_search_match)."""
-    _select_tracker_with_log_file(window, tmp_path, "first\nERROR second\nthird\n")
+    _select_tracker_with_log_file(
+        window, tmp_path,
+        "2026-08-24 10:00:01 INFO first\n"
+        "2026-08-24 10:00:02 ERROR second\n"
+        "2026-08-24 10:00:03 INFO third\n"
+    )
 
     window.show_line_numbers.setChecked(True)
     window.search_edit.setText("error")
@@ -290,3 +357,94 @@ def test_line_numbers_render_inline_with_content(qtbot, window, tmp_path):
     matching_lines = [line for line in rendered_lines if "ERROR second" in line]
     assert len(matching_lines) == 1
     assert matching_lines[0].startswith("2:")
+
+
+TRACEBACK_LOG = (
+    "2026-08-24 10:00:01 INFO Starting up\n"
+    "2026-08-24 10:00:02 ERROR Failed to connect\n"
+    "Traceback (most recent call last):\n"
+    '  File "app.py", line 12, in <module>\n'
+    "    connect()\n"
+    "ConnectionError: refused\n"
+    "2026-08-24 10:00:03 INFO Retrying\n"
+)
+
+
+def test_match_inside_traceback_returns_whole_entry(qtbot, window, tmp_path):
+    """The point of the feature: a term found on a continuation line returns the entry
+    it belongs to - header included - not the isolated line."""
+    _select_tracker_with_log_file(window, tmp_path, TRACEBACK_LOG)
+
+    window.search_edit.setText("ConnectionError")
+    window.search_logs()
+
+    result_text = window.log_viewer.toPlainText()
+    assert "ERROR Failed to connect" in result_text
+    assert "Traceback (most recent call last):" in result_text
+    assert "ConnectionError: refused" in result_text
+    # Neighbouring entries stay out with no context configured.
+    assert "Starting up" not in result_text
+    assert "Retrying" not in result_text
+
+
+def test_multiline_entry_counts_as_a_single_match(qtbot, window, tmp_path):
+    """Two matching physical lines inside one entry are one match, not two."""
+    _select_tracker_with_log_file(window, tmp_path, TRACEBACK_LOG)
+
+    window.search_edit.setText("connect")
+    window.search_logs()
+
+    assert "Found 1 matches" in window.log_viewer.toPlainText()
+
+
+def test_multiline_disabled_returns_only_the_matching_line(qtbot, window, tmp_path):
+    """The pre-grouping per-line path stays available behind the toggle."""
+    _select_tracker_with_log_file(window, tmp_path, TRACEBACK_LOG)
+
+    window.multiline_entries.setChecked(False)
+    window.search_edit.setText("ConnectionError")
+    window.search_logs()
+
+    result_text = window.log_viewer.toPlainText()
+    assert "ConnectionError: refused" in result_text
+    assert "ERROR Failed to connect" not in result_text
+    assert "Traceback (most recent call last):" not in result_text
+
+
+def test_context_counts_entries_not_physical_lines(qtbot, window, tmp_path):
+    """One entry of context pulls in a whole neighbouring entry, however many
+    physical lines it spans."""
+    _select_tracker_with_log_file(window, tmp_path, TRACEBACK_LOG)
+
+    window.context_before.setValue(1)
+    window.context_after.setValue(1)
+    window.search_edit.setText("ConnectionError")
+    window.search_logs()
+
+    result_text = window.log_viewer.toPlainText()
+    assert "Starting up" in result_text
+    assert "Retrying" in result_text
+
+
+def test_long_entry_is_truncated_at_max_entry_lines(qtbot, window, tmp_path):
+    """One deep stack trace must not flood the results view."""
+    frames = "".join(f"    frame {i}\n" for i in range(10))
+    _select_tracker_with_log_file(window, tmp_path, "2026-08-24 10:00:02 ERROR boom\n" + frames)
+    window.config_manager.set("search.max_entry_lines", 3)
+
+    window.search_edit.setText("boom")
+    window.search_logs()
+
+    result_text = window.log_viewer.toPlainText()
+    assert "ERROR boom" in result_text
+    assert "frame 1" in result_text
+    assert "frame 9" not in result_text
+    assert "more lines truncated" in result_text
+
+
+def test_multiline_toggle_persisted_to_config(qtbot, window):
+    window.multiline_entries.setChecked(False)
+    assert window.config_manager.get("search.multiline_entries") is False
+
+    window.multiline_entries.setChecked(True)
+    assert window.config_manager.get("search.multiline_entries") is True
