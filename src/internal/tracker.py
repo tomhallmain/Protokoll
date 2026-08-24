@@ -2,7 +2,7 @@ from datetime import datetime
 import json
 import os
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Set
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 from .log_directory_finder import LogDirectoryFinder
 from ..utils.config_manager import ConfigManager
@@ -54,6 +54,23 @@ class Tracker:
         if directory in self.log_directories:
             self.log_directories.remove(directory)
             self.save_metadata()
+
+    def set_log_directories(self, directories: Iterable[str]) -> None:
+        """
+        Replace the tracked directories with `directories`, adding and removing as needed.
+
+        Every addition is validated before anything is changed, so a bad path leaves the
+        tracker exactly as it was instead of half-updated. Metadata is written once.
+        """
+        directories = set(directories)
+        for directory in directories - self.log_directories:
+            if not os.path.exists(directory):
+                raise ValueError(f"Directory does not exist: {directory}")
+            if not os.path.isdir(directory):
+                raise ValueError(f"Path is not a directory: {directory}")
+
+        self.log_directories = directories
+        self.save_metadata()
     
     def get_log_files(self) -> List[Dict[str, Any]]:
         """Get all log files in the tracked directories"""

@@ -256,6 +256,22 @@ class ThemeManager:
 
 
     @staticmethod
+    def styled_span(text, color=None, bold=False, background_color=None):
+        """Wrap `text` in an HTML span carrying the given styles, or return it unchanged
+        when none apply, so callers don't emit pointless markup."""
+        style_parts = []
+        if color:
+            style_parts.append(f"color: {color}")
+        if background_color:
+            style_parts.append(f"background-color: {background_color}")
+        if bold:
+            style_parts.append("font-weight: bold")
+
+        if not style_parts:
+            return text
+        return f'<span style="{"; ".join(style_parts)}">{text}</span>'
+
+    @staticmethod
     def convert_ansi_to_html(text):
         """Convert ANSI color codes to HTML formatting"""
         # ANSI color code patterns

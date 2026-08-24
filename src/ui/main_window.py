@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QFont, QPalette, QColor, QFontMetrics, QTextCursor
 
-from ..internal import log_entries
+from ..internal import log_content, log_entries
 from ..internal.tracker import Tracker
 from ..utils.config_manager import ConfigManager
 from ..utils.theme_manager import ThemeManager
@@ -329,12 +329,7 @@ class MainWindow(QMainWindow):
                     config_manager=self.config_manager
                 )
                 
-                # Add all log directories
-                for directory in data["log_directories"]:
-                    tracker.add_log_directory(directory)
-                
-                # Save initial state
-                tracker.save_metadata()
+                tracker.set_log_directories(data["log_directories"])
                 
                 self.config_manager.add_recent_tracker(data["name"])
                 self.load_trackers()
@@ -452,67 +447,43 @@ class MainWindow(QMainWindow):
         self.display_log_file(log_file_path)
         self.update_window_title()
 
-    def _styled_span(self, text, color=None, bold=False, background_color=None):
-        """Build an HTML span for `text`, or return it unchanged if no styling applies."""
-        style_parts = []
-        if color:
-            style_parts.append(f"color: {color}")
-        if background_color:
-            style_parts.append(f"background-color: {background_color}")
-        if bold:
-            style_parts.append("font-weight: bold")
-
-        if style_parts:
-            style = "; ".join(style_parts)
-            return f'<span style="{style}">{text}</span>'
-        return text
-
     def append_styled_content(self, text, color=None, bold=False, background_color=None):
         """Append content to the log viewer with optional styling"""
-        self.log_viewer.append(self._styled_span(text, color=color, bold=bold, background_color=background_color))
+        self.log_viewer.append(ThemeManager.styled_span(
+            text, color=color, bold=bold, background_color=background_color))
 
     def _load_single_long_line(self, content):
         """Handle a single very long line (e.g., minified JSON) by truncating"""
-        max_length = 10000  # Show first 10KB
-        
-        if len(content) > max_length:
-            # Truncate and show warning
-            truncated_content = content[:max_length]
-            self.append_styled_content("⚠️  File contains a very long line. Showing first 10KB:", color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
+        text, original_length = log_content.truncate_long_line(content)
+
+        if original_length is not None:
+            # "10KB" is an approximation of log_content.MAX_LONG_LINE_CHARS, which counts
+            # characters rather than bytes; change both together.
+            self.append_styled_content(
+                "⚠️  File contains a very long line. Showing first 10KB:",
+                color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
             self.log_viewer.append("\n")
-            
-            # Convert the truncated content
-            formatted_content = ThemeManager.convert_ansi_to_html(truncated_content)
-            self.log_viewer.append(formatted_content)
-            
-            # Show truncation indicator
-            self.append_styled_content(f"\n... (truncated, original length: {len(content):,} characters)", color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
-        else:
-            # Convert the full content
-            formatted_content = ThemeManager.convert_ansi_to_html(content)
-            self.log_viewer.append(formatted_content)
+
+        self.log_viewer.append(ThemeManager.convert_ansi_to_html(text))
+
+        if original_length is not None:
+            self.append_styled_content(
+                f"\n... (truncated, original length: {original_length:,} characters)",
+                color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
 
     def _load_large_file_chunked(self, content):
         """Handle a large multi-line file by loading in chunks"""
-        lines = content.split('\n')
-        chunk_size = 500  # Process 500 lines at a time
-
         # No in-document progress indicator here (deliberately): an earlier version tried
         # to insert one and then update/remove it in place via cursor manipulation, which
         # got corrupted by or never found again past the file-info header this method is
         # always called after. Getting that right needs a live PyQt6 environment to verify
         # against, which isn't available where this was last touched - periodic
         # processEvents() calls below still keep the UI responsive during the load.
-        for i in range(0, len(lines), chunk_size):
-            chunk_lines = lines[i:i+chunk_size]
-            chunk_content = '\n'.join(chunk_lines)
-
-            # Convert this chunk
-            formatted_chunk = ThemeManager.convert_ansi_to_html(chunk_content)
-            self.log_viewer.append(formatted_chunk)
+        for i, chunk in enumerate(log_content.iter_chunks(content)):
+            self.log_viewer.append(ThemeManager.convert_ansi_to_html(chunk))
 
             # Process events every few chunks to keep UI responsive
-            if i % (chunk_size * 2) == 0:
+            if i % 2 == 0:
                 QApplication.processEvents()
 
     def display_log_file(self, file_path):
@@ -570,22 +541,16 @@ class MainWindow(QMainWindow):
             self.log_viewer.append("\n")
             return
 
-        # Determine how to handle the content based on its characteristics
-        content_length = len(content)
-        line_count = content.count('\n') + 1
+        line_count = log_content.count_lines(content)
         header_had_unknown_lines = file_info.get("total_lines") is None
 
-        if content_length > 1000000:  # Very large file (>1MB)
-            # Case 1: Multi-lined sections, very long file - use chunks
-            if line_count > 100:  # Multiple lines
-                self._load_large_file_chunked(content)
-            else:
-                # Case 2: One very long line (minified JSON, etc.) - truncate
-                self._load_single_long_line(content)
+        strategy = log_content.choose_render_strategy(content)
+        if strategy == log_content.RENDER_CHUNKED:
+            self._load_large_file_chunked(content)
+        elif strategy == log_content.RENDER_LONG_LINE:
+            self._load_single_long_line(content)
         else:
-            # Case 3: Single append for reasonable length files
-            formatted_content = ThemeManager.convert_ansi_to_html(content)
-            self.log_viewer.append(formatted_content)
+            self.log_viewer.append(ThemeManager.convert_ansi_to_html(content))
 
         self.log_viewer.append("\n")
 
@@ -698,7 +663,7 @@ class MainWindow(QMainWindow):
         if self.show_line_numbers.isChecked() and line_num is not None:
             number_color = (ThemeManager.DARK_THEME["log_viewer"]["info"] if is_match
                              else ThemeManager.DARK_THEME["log_viewer"]["text"])
-            number_span = self._styled_span(f"{line_num}: ", color=number_color)
+            number_span = ThemeManager.styled_span(f"{line_num}: ", color=number_color)
             # Combined into one append() call so the number sits to the left of the
             # line on the same row, instead of on its own paragraph above it.
             self.log_viewer.append(number_span + formatted_line)
@@ -863,26 +828,9 @@ class MainWindow(QMainWindow):
                 tracker.name = data["name"]
                 tracker.description = data["description"]
                 
-                # Update log directories
-                current_dirs = set(tracker.get_log_directories())
-                new_dirs = set(data["log_directories"])
-                
-                logger.debug(f"Directories to remove: {current_dirs - new_dirs}")
-                logger.debug(f"Directories to add: {new_dirs - current_dirs}")
-                
-                # Remove directories that are no longer present
-                for directory in current_dirs - new_dirs:
-                    tracker.remove_log_directory(directory)
-                
-                # Add new directories
-                for directory in new_dirs - current_dirs:
-                    tracker.add_log_directory(directory)
-                
+                tracker.set_log_directories(data["log_directories"])
                 logger.debug(f"Final directories after update: {tracker.get_log_directories()}")
-                
-                # Save changes
-                tracker.save_metadata()
-                
+
                 # Update UI
                 self.load_trackers()
                 
@@ -953,15 +901,12 @@ class MainWindow(QMainWindow):
         )
         
         if ok and command.strip():
-            # Validate the command contains the placeholder
-            if "{filepath}" not in command:
-                QMessageBox.warning(self, "Invalid Command", 
+            if not Utils.editor_command_has_placeholder(command):
+                QMessageBox.warning(self, "Invalid Command",
                                   "The command must contain {filepath} as a placeholder for the file path.")
                 return
-            
-            # Test if the executable exists
-            cmd_parts = command.split()
-            executable = cmd_parts[0]
+
+            executable, _ = Utils.editor_command_parts(command)
             if not Utils.executable_available(executable):
                 reply = QMessageBox.question(self, "Executable Not Found", 
                                            f"The executable '{executable}' was not found in your system PATH.\n"

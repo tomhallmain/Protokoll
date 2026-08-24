@@ -123,6 +123,77 @@ def test_list_trackers_returns_all_saved_trackers(config_manager):
     assert names == {"tracker-a", "tracker-b"}
 
 
+def test_set_log_directories_adds_and_removes_in_one_step(tmp_path, config_manager):
+    keep = tmp_path / "keep"
+    drop = tmp_path / "drop"
+    add = tmp_path / "add"
+    for d in (keep, drop, add):
+        d.mkdir()
+
+    tracker = Tracker("my-app", config_manager=config_manager)
+    tracker.add_log_directory(str(keep))
+    tracker.add_log_directory(str(drop))
+
+    tracker.set_log_directories([str(keep), str(add)])
+
+    assert set(tracker.get_log_directories()) == {str(keep), str(add)}
+
+
+def test_set_log_directories_persists_to_metadata(tmp_path, config_manager):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    tracker = Tracker("my-app", config_manager=config_manager)
+
+    tracker.set_log_directories([str(log_dir)])
+
+    reloaded = Tracker.load("my-app", config_manager)
+    assert reloaded.get_log_directories() == [str(log_dir)]
+
+
+def test_set_log_directories_rejects_a_missing_directory(tmp_path, config_manager):
+    existing = tmp_path / "logs"
+    existing.mkdir()
+    tracker = Tracker("my-app", config_manager=config_manager)
+    tracker.add_log_directory(str(existing))
+
+    with pytest.raises(ValueError):
+        tracker.set_log_directories([str(existing), str(tmp_path / "nope")])
+
+
+def test_set_log_directories_leaves_the_tracker_untouched_when_one_path_is_bad(
+        tmp_path, config_manager):
+    """Validation happens up front, so a bad path can't half-apply the change."""
+    existing = tmp_path / "logs"
+    existing.mkdir()
+    tracker = Tracker("my-app", config_manager=config_manager)
+    tracker.add_log_directory(str(existing))
+
+    with pytest.raises(ValueError):
+        tracker.set_log_directories([str(tmp_path / "nope")])
+
+    assert tracker.get_log_directories() == [str(existing)]
+
+
+def test_set_log_directories_rejects_a_file_path(tmp_path, config_manager):
+    not_a_dir = tmp_path / "app.log"
+    not_a_dir.write_bytes(b"content\n")
+    tracker = Tracker("my-app", config_manager=config_manager)
+
+    with pytest.raises(ValueError):
+        tracker.set_log_directories([str(not_a_dir)])
+
+
+def test_set_log_directories_can_clear_everything(tmp_path, config_manager):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    tracker = Tracker("my-app", config_manager=config_manager)
+    tracker.add_log_directory(str(log_dir))
+
+    tracker.set_log_directories([])
+
+    assert tracker.get_log_directories() == []
+
+
 def test_search_logs_finds_matching_lines(tmp_path, config_manager):
     log_dir = tmp_path / "logs"
     log_dir.mkdir()

@@ -672,6 +672,24 @@ class Utils:
         # This is a placeholder and should be replaced with the actual implementation
         return True
 
+    EDITOR_FILEPATH_PLACEHOLDER = "{filepath}"
+
+    @staticmethod
+    def editor_command_has_placeholder(command):
+        """Whether a custom editor command says where the file path goes."""
+        return Utils.EDITOR_FILEPATH_PLACEHOLDER in (command or "")
+
+    @staticmethod
+    def editor_command_parts(command):
+        """
+        Split a custom editor command into (executable, args). Returns (None, []) for an
+        empty command, so callers don't have to guard against an empty token list.
+        """
+        parts = (command or "").split()
+        if not parts:
+            return None, []
+        return parts[0], parts[1:]
+
     @staticmethod
     def open_file_with_editor(filepath, custom_command=None, error_callback=None):
         """
@@ -691,13 +709,9 @@ class Utils:
         def run_editor():
             try:
                 if custom_command:
-                    # Replace {filepath} placeholder with actual file path
-                    command = custom_command.replace("{filepath}", filepath)
-                    # Split command into executable and arguments
-                    cmd_parts = command.split()
-                    executable = cmd_parts[0]
-                    args = cmd_parts[1:] if len(cmd_parts) > 1 else []
-                    
+                    command = custom_command.replace(Utils.EDITOR_FILEPATH_PLACEHOLDER, filepath)
+                    executable, args = Utils.editor_command_parts(command)
+
                     logger.debug(f"Opening file with custom editor: {command}")
                     
                     # Check if executable exists

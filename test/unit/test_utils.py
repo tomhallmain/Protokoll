@@ -50,3 +50,27 @@ def test_contains_emoji():
 
 def test_clean_emoji_replaces_with_marker():
     assert Utils.clean_emoji("hi \U0001F600 there") == "hi [emoji] there"
+
+
+@pytest.mark.parametrize("command, expected", [
+    ("code {filepath}", True),
+    ("notepad.exe", False),
+    ("", False),
+    (None, False),
+])
+def test_editor_command_has_placeholder(command, expected):
+    assert Utils.editor_command_has_placeholder(command) is expected
+
+
+@pytest.mark.parametrize("command, expected", [
+    ("code --wait {filepath}", ("code", ["--wait", "{filepath}"])),
+    ("notepad.exe", ("notepad.exe", [])),
+])
+def test_editor_command_parts_splits_executable_from_arguments(command, expected):
+    assert Utils.editor_command_parts(command) == expected
+
+
+@pytest.mark.parametrize("command", ["", "   ", None])
+def test_editor_command_parts_handles_an_empty_command(command):
+    """Callers used to index into a bare split(), which raised on empty input."""
+    assert Utils.editor_command_parts(command) == (None, [])

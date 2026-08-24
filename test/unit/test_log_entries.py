@@ -67,9 +67,9 @@ def test_leading_level_starts_an_entry_without_a_timestamp():
 
 
 @pytest.mark.parametrize("line", [
-    "  File \"app.py\", line 12, in <module>",   # indented traceback frame
-    "\tat Foo.bar(Foo.java:9)",                  # tab-indented stack frame
-    "   2026-08-24 10:00:01 indented timestamp",
+    pytest.param("  File \"app.py\", line 12, in <module>", id="python-traceback-frame"),
+    pytest.param("\tat Foo.bar(Foo.java:9)", id="tab-indented-stack-frame"),
+    pytest.param("   2026-08-24 10:00:01 indented timestamp", id="indented-timestamp"),
 ])
 def test_indented_lines_are_continuations(line):
     """Leading whitespace is the strongest continuation signal there is."""
@@ -77,9 +77,9 @@ def test_indented_lines_are_continuations(line):
 
 
 @pytest.mark.parametrize("line", [
-    "TERRORS everywhere",        # level token inside a longer word
-    "INFORMATIONAL notice",
-    "ConnectionError: refused",  # the tail of a traceback, not a new entry
+    pytest.param("TERRORS everywhere", id="level-inside-a-longer-word"),
+    pytest.param("INFORMATIONAL notice", id="level-as-a-word-prefix"),
+    pytest.param("ConnectionError: refused", id="traceback-tail"),
 ])
 def test_level_lookalikes_do_not_start_an_entry(line):
     assert not is_entry_start(line)
@@ -208,9 +208,9 @@ def test_distant_matches_stay_in_separate_blocks():
 
 
 @pytest.mark.parametrize("kwargs", [
-    {"context_before": 999},
-    {"context_after": 999},
-    {"context_before": 999, "context_after": 999},
+    pytest.param({"context_before": 999}, id="before"),
+    pytest.param({"context_after": 999}, id="after"),
+    pytest.param({"context_before": 999, "context_after": 999}, id="both"),
 ])
 def test_context_larger_than_the_file_clips_instead_of_wrapping(kwargs):
     content = "".join(f"2026-08-24 10:00:0{i} ERROR e{i}\n" for i in range(5))
@@ -243,7 +243,11 @@ def test_limit_to_line_start_anchors_after_the_level_prefix():
 
 # --- odd input -------------------------------------------------------------
 
-@pytest.mark.parametrize("content", ["", "\n", "\n\n\n"])
+@pytest.mark.parametrize("content", [
+    pytest.param("", id="empty"),
+    pytest.param("\n", id="one-newline"),
+    pytest.param("\n\n\n", id="blank-lines"),
+])
 def test_empty_content_yields_no_matches(content):
     assert plain(content, "anything") == []
 
