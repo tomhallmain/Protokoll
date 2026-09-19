@@ -29,6 +29,14 @@ A desktop application for managing and viewing log files across different projec
    python main.py
    ```
 
+## Encrypted state
+
+Tracker definitions, the tracked log directories and the last-used tracker are
+encrypted at rest. The keys for them are backed up automatically to an external
+drive (set `PROTOKOLL_KEY_BACKUP_DIR` to choose where). Run
+`python scripts/key_material.py` to check that backup's state, or `backup` to
+take one by hand.
+
 ## Usage
 
 1. Create a new Tracker for your project

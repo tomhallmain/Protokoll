@@ -1,7 +1,5 @@
 from datetime import datetime
-import json
 import os
-from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set
 
 from .log_directory_finder import LogDirectoryFinder
@@ -18,13 +16,12 @@ class Tracker:
         self.log_directories: Set[str] = set()  # Set of log directory paths
         self.created_at = datetime.now()
         self.config_manager = config_manager or ConfigManager()
-        
-        # Create tracker directory
-        self.tracker_dir = Path(self.config_manager.config_dir) / "trackers" / name
-        self.tracker_dir.mkdir(parents=True, exist_ok=True)
+        # The name this tracker is stored under, so a rename replaces that
+        # entry rather than leaving the tracker filed under both names.
+        self._stored_name: Optional[str] = None
     
     def save_metadata(self) -> None:
-        """Save tracker metadata to a JSON file"""
+        """Save tracker metadata to the encrypted cache"""
         metadata = {
             "name": self.name,
             "description": self.description,
@@ -32,9 +29,9 @@ class Tracker:
             "log_directories": list(self.log_directories)  # Convert set to list for JSON serialization
         }
         
-        metadata_file = self.tracker_dir / "metadata.json"
-        with open(metadata_file, "w", encoding="utf-8") as f:
-            json.dump(metadata, f, indent=4)
+        self.config_manager.save_tracker_metadata(
+            self.name, metadata, previous_name=self._stored_name)
+        self._stored_name = self.name
     
     def add_log_directory(self, directory: str) -> bool:
         """Add a log directory to the tracker"""
@@ -130,39 +127,30 @@ class Tracker:
     
     @classmethod
     def load(cls, name: str, config_manager: Optional[ConfigManager] = None) -> Optional['Tracker']:
-        """Load a tracker from disk"""
+        """Load a tracker from the encrypted cache"""
         config_manager = config_manager or ConfigManager()
-        tracker_dir = Path(config_manager.config_dir) / "trackers" / name
+        metadata = config_manager.get_tracker_metadata(name)
         
-        if not tracker_dir.exists():
-            return None
-        
-        metadata_file = tracker_dir / "metadata.json"
-        if not metadata_file.exists():
+        if metadata is None:
             return None
         
         try:
-            with open(metadata_file, "r", encoding="utf-8") as f:
-                metadata = json.load(f)
-            
             tracker = cls(metadata["name"], metadata["description"], config_manager)
             tracker.created_at = datetime.fromisoformat(metadata["created_at"])
             tracker.log_directories = set(metadata.get("log_directories", []))
+            tracker._stored_name = name
             return tracker
         except Exception as e:
+            logger.error(f"Error loading tracker {name}: {e}")
             return None
     
     @classmethod
     def list_trackers(cls, config_manager: Optional[ConfigManager] = None) -> List['Tracker']:
         """List all available trackers"""
         config_manager = config_manager or ConfigManager()
-        trackers_dir = Path(config_manager.config_dir) / "trackers"
-        
-        if not trackers_dir.exists():
-            return []
         
         trackers = []
-        for name in os.listdir(trackers_dir):
+        for name in config_manager.list_tracker_names():
             tracker = cls.load(name, config_manager)
             if tracker:
                 trackers.append(tracker)

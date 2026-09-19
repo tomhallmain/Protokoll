@@ -59,6 +59,16 @@ class MainWindow(QMainWindow):
             logger.error(f"MainWindow.__init__: Failed to load trackers: {str(e)}")
             # Don't raise here, this is not critical
         
+        # An unreadable cache leaves the tracker list empty and stops anything
+        # being saved over it, neither of which is visible on its own.
+        cache_error = self.config_manager.app_info_cache.load_error
+        if cache_error:
+            logger.error(f"MainWindow.__init__: Encrypted cache could not be read: {cache_error}")
+            self.handle_error(
+                "Your trackers could not be read, and no changes will be saved until "
+                f"that is resolved.\n\n{cache_error}"
+            )
+        
     
     def setup_ui(self):
         """Set up the user interface"""
@@ -936,6 +946,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         """Handle window close event"""
         self.save_window_state()
+        self.config_manager.flush_cache()
         super().closeEvent(event) 
 
     def handle_error(self, error_message: str):

@@ -1,6 +1,6 @@
 """
 Unit tests for src.internal.tracker.Tracker: log directory management, log file
-discovery, and metadata persistence.
+discovery, and metadata persistence through the encrypted cache.
 """
 
 import pytest
@@ -24,7 +24,7 @@ def test_add_log_directory_persists_and_updates_metadata(tmp_path, config_manage
     tracker.add_log_directory(str(log_dir))
 
     assert str(log_dir) in tracker.get_log_directories()
-    assert (tracker.tracker_dir / "metadata.json").exists()
+    assert config_manager.get_tracker_metadata("my-app")["log_directories"] == [str(log_dir)]
 
 
 def test_add_log_directory_rejects_nonexistent_path(tmp_path, config_manager):
@@ -108,6 +108,23 @@ def test_save_and_load_metadata_roundtrip(tmp_path, config_manager):
     assert loaded.name == "my-app"
     assert loaded.description == "a description"
     assert loaded.get_log_directories() == [str(log_dir)]
+
+
+def test_saving_a_renamed_tracker_leaves_only_the_new_name(tmp_path, config_manager):
+    """A rename that kept both entries would list the tracker twice, and leave
+    the old name loading a copy that no longer gets updated."""
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    tracker = Tracker("my-app", config_manager=config_manager)
+    tracker.add_log_directory(str(log_dir))
+
+    tracker.name = "renamed-app"
+    tracker.save_metadata()
+
+    assert Tracker.load("my-app", config_manager) is None
+    reloaded = Tracker.load("renamed-app", config_manager)
+    assert reloaded.get_log_directories() == [str(log_dir)]
+    assert [t.name for t in Tracker.list_trackers(config_manager)] == ["renamed-app"]
 
 
 def test_load_returns_none_for_unknown_tracker(config_manager):

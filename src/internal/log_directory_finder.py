@@ -1,10 +1,10 @@
 from collections import deque
-import json
 import os
 import re
 import platform
 from typing import Dict, List, Tuple
 
+from ..utils.config_manager import ConfigManager
 from ..utils.logging_setup import get_logger
 from ..utils.utils import Utils
 from ..utils.file_handler import FileHandler
@@ -75,27 +75,20 @@ class LogDirectoryFinder:
         'Application Data'  # Add this to prevent recursive Application Data directories
     }
     
-    # Cache file for custom log directories
-    CACHE_FILE = os.path.join(os.path.expanduser('~'), '.protokoll', 'custom_log_dirs.json')
-    
     @staticmethod
     def _load_custom_directories() -> List[str]:
-        """Load custom log directories from cache file."""
+        """Load custom log directories from the encrypted cache."""
         try:
-            if os.path.exists(LogDirectoryFinder.CACHE_FILE):
-                with open(LogDirectoryFinder.CACHE_FILE, 'r') as f:
-                    return json.load(f)
+            return ConfigManager().get_custom_log_directories()
         except Exception as e:
             logger.error(f"Error loading custom directories: {str(e)}")
         return []
     
     @staticmethod
     def _save_custom_directories(directories: List[str]) -> None:
-        """Save custom log directories to cache file."""
+        """Save custom log directories to the encrypted cache."""
         try:
-            os.makedirs(os.path.dirname(LogDirectoryFinder.CACHE_FILE), exist_ok=True)
-            with open(LogDirectoryFinder.CACHE_FILE, 'w') as f:
-                json.dump(directories, f, indent=2)
+            ConfigManager().set_custom_log_directories(directories)
         except Exception as e:
             logger.error(f"Error saving custom directories: {str(e)}")
     

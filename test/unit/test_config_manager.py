@@ -1,15 +1,18 @@
 """
-Unit tests for src.utils.config_manager.ConfigManager.
+Unit tests for src.utils.config_manager.ConfigManager: the split between the plain
+config file and the encrypted cache, and the migration off the plaintext files.
 
-Relies on the root conftest's autouse `isolated_app_dirs` (redirects HOME/config_dir
-to a per-test tmp_path) and `fake_keyring` (so the encryption these tests exercise
-never touches a real OS keyring) - see test/conftest.py.
+Relies on the root conftest's autouse `isolated_app_dirs` (redirects HOME and the
+cache directory to a per-test tmp_path) and `fake_keyring` (so the encryption these
+tests exercise never touches a real OS keyring) - see test/conftest.py.
 """
 
 import json
 
 import pytest
 
+import src.utils.app_info_cache as app_info_cache_module
+from src.utils.app_info_cache import AppInfoCache
 from src.utils.config_manager import ConfigManager
 
 pytestmark = pytest.mark.unit
@@ -18,6 +21,29 @@ pytestmark = pytest.mark.unit
 @pytest.fixture
 def config_manager():
     return ConfigManager()
+
+
+def _cache_file(manager):
+    return manager.cache_dir / AppInfoCache.CACHE_FILENAME
+
+
+def _write_legacy_state(config_dir):
+    """The files this app wrote before any of it was encrypted."""
+    tracker_dir = config_dir / "trackers" / "my-app"
+    tracker_dir.mkdir(parents=True)
+    (tracker_dir / "metadata.json").write_text(json.dumps({
+        "name": "my-app",
+        "description": "a description",
+        "created_at": "2026-01-01T00:00:00",
+        "log_directories": ["/var/log/my-app"],
+    }), encoding="utf-8")
+    (config_dir / "custom_log_dirs.json").write_text(
+        json.dumps(["/opt/logs"]), encoding="utf-8")
+    (config_dir / "config.json").write_text(json.dumps({
+        "theme": "light",
+        "last_tracker": "my-app",
+        "last_log_file_my-app": "/var/log/my-app/app.log",
+    }), encoding="utf-8")
 
 
 def test_config_dir_is_isolated_from_real_home(config_manager, tmp_path):
@@ -50,43 +76,121 @@ def test_add_recent_tracker_moves_existing_entry_to_front(config_manager):
     assert config_manager.get("recent_trackers")[:2] == ["a", "b"]
 
 
-def test_save_and_load_cache_roundtrip(config_manager):
-    data = {"trackers": {"my-app": {"service_name": "MyApp", "app_identifier": "logs"}}}
-    config_manager.save_cache("access_pointers", data)
+def test_tracker_keys_never_reach_the_plain_config_file(config_manager):
+    """Which application is tracked, and where its logs are, is the part worth
+    encrypting - the window size and search toggles are not."""
+    config_manager.set("last_tracker", "sensitive-app")
+    config_manager.set("last_log_file_sensitive-app", "/var/log/sensitive-app/app.log")
+    config_manager.set("window.width", 1280)
+    config_manager.flush_cache()
 
-    assert config_manager.load_cache("access_pointers") == data
+    assert config_manager.get("last_tracker") == "sensitive-app"
+    config_text = config_manager.config_file.read_text(encoding="utf-8")
+    assert "sensitive-app" not in config_text
+    assert "1280" in config_text
 
 
 def test_cache_is_encrypted_at_rest(config_manager):
-    """The cache can hold key-access pointers for tracked apps, so it must never be
-    plain JSON on disk."""
-    config_manager.save_cache("secrets", {"token": "super-secret-value"})
+    config_manager.set("last_tracker", "super-secret-value")
+    config_manager.flush_cache()
 
-    raw_bytes = config_manager.get_cache_path("secrets").read_bytes()
+    raw_bytes = _cache_file(config_manager).read_bytes()
 
     assert b"super-secret-value" not in raw_bytes
     with pytest.raises(Exception):
         json.loads(raw_bytes.decode("utf-8"))
 
 
-def test_load_cache_returns_default_when_missing(config_manager):
-    assert config_manager.load_cache("does-not-exist", default="fallback") == "fallback"
+def test_cache_writes_are_held_until_flush(config_manager):
+    """set() runs on every search toggle and log file selection, and encrypting
+    the cache derives a key."""
+    config_manager.set("last_tracker", "my-app")
+
+    assert not _cache_file(config_manager).exists()
+
+    config_manager.flush_cache()
+
+    assert _cache_file(config_manager).exists()
 
 
-def test_legacy_plaintext_cache_is_migrated(config_manager):
-    """A .cache file written before encryption was added (plain JSON) must still load
-    correctly, and get transparently re-saved encrypted - regression test for a bug
-    that otherwise silently discards old cache data (see load_cache's fallback path)."""
-    legacy_data = {"old": "data"}
-    cache_file = config_manager.get_cache_path("legacy")
-    cache_file.write_text(json.dumps(legacy_data), encoding="utf-8")
+def test_tracker_metadata_is_stored_immediately(config_manager):
+    config_manager.save_tracker_metadata("my-app", {"name": "my-app"})
 
-    assert config_manager.load_cache("legacy") == legacy_data
+    assert _cache_file(config_manager).exists()
+    assert config_manager.list_tracker_names() == ["my-app"]
 
-    # The file on disk should no longer be plain JSON after migration.
-    raw_bytes = cache_file.read_bytes()
-    with pytest.raises(Exception):
-        json.loads(raw_bytes.decode("utf-8"))
 
-    # And it should still load correctly now that it's gone through the encrypted path.
-    assert config_manager.load_cache("legacy") == legacy_data
+def test_saving_a_tracker_under_a_new_name_drops_the_old_entry(config_manager):
+    config_manager.save_tracker_metadata("my-app", {"name": "my-app"})
+
+    config_manager.save_tracker_metadata(
+        "renamed-app", {"name": "renamed-app"}, previous_name="my-app")
+
+    assert config_manager.list_tracker_names() == ["renamed-app"]
+    assert config_manager.get_tracker_metadata("my-app") is None
+
+
+def test_legacy_plaintext_state_is_migrated_into_the_cache(tmp_path):
+    config_dir = tmp_path / ".protokoll"
+    config_dir.mkdir(parents=True)
+    _write_legacy_state(config_dir)
+
+    manager = ConfigManager()
+
+    assert manager.get_tracker_metadata("my-app")["log_directories"] == ["/var/log/my-app"]
+    assert manager.get_custom_log_directories() == ["/opt/logs"]
+    assert manager.get("last_tracker") == "my-app"
+    assert manager.get("last_log_file_my-app") == "/var/log/my-app/app.log"
+
+
+def test_migrated_plaintext_is_deleted_once_the_cache_reads_back(tmp_path):
+    config_dir = tmp_path / ".protokoll"
+    config_dir.mkdir(parents=True)
+    _write_legacy_state(config_dir)
+
+    manager = ConfigManager()
+
+    assert not (config_dir / "trackers" / "my-app" / "metadata.json").exists()
+    assert not (config_dir / "custom_log_dirs.json").exists()
+    stored_config = json.loads(manager.config_file.read_text(encoding="utf-8"))
+    assert "last_tracker" not in stored_config
+    assert "last_log_file_my-app" not in stored_config
+    assert stored_config["theme"] == "light"  # the rest of the config is untouched
+
+
+def test_migration_keeps_the_plaintext_when_the_cache_cannot_be_encrypted(
+        tmp_path, monkeypatch):
+    """Deleting the only readable copy of this state on the strength of a write
+    that did not happen would lose it outright."""
+    config_dir = tmp_path / ".protokoll"
+    config_dir.mkdir(parents=True)
+    _write_legacy_state(config_dir)
+
+    def _boom(*args, **kwargs):
+        raise OSError("no key material")
+
+    monkeypatch.setattr(app_info_cache_module, "encrypt_data_to_file", _boom)
+
+    manager = ConfigManager()
+
+    assert (config_dir / "trackers" / "my-app" / "metadata.json").exists()
+    assert (config_dir / "custom_log_dirs.json").exists()
+    stored_config = json.loads(manager.config_file.read_text(encoding="utf-8"))
+    assert stored_config["last_tracker"] == "my-app"
+
+
+def test_an_unreadable_cache_is_never_overwritten(config_manager):
+    """Rewriting it would replace state that a restored key could still open."""
+    config_manager.set("last_tracker", "my-app")
+    config_manager.flush_cache()
+    cache_file = _cache_file(config_manager)
+    cache_file.write_bytes(b"not an encrypted cache")
+    AppInfoCache.clear_instances()
+
+    reopened = ConfigManager()
+
+    assert reopened.app_info_cache.load_error
+    reopened.set("last_tracker", "something-else")
+    reopened.flush_cache()
+
+    assert cache_file.read_bytes() == b"not an encrypted cache"

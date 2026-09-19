@@ -59,7 +59,9 @@ def show_toast(parent, message, duration_ms=2500):
     def fade_out():
         effect = QGraphicsOpacityEffect(toast)
         toast.setGraphicsEffect(effect)
-        animation = QPropertyAnimation(effect, b"opacity")
+        # Parented to the toast, so a parent closing mid-fade takes the
+        # animation with it instead of leaving it driving a deleted object.
+        animation = QPropertyAnimation(effect, b"opacity", toast)
         animation.setDuration(300)
         animation.setStartValue(1.0)
         animation.setEndValue(0.0)
@@ -69,4 +71,12 @@ def show_toast(parent, message, duration_ms=2500):
         toast._effect = effect
         animation.start()
 
-    QTimer.singleShot(duration_ms, fade_out)
+    # A child of the toast, so destroying the toast cancels it. A bare
+    # QTimer.singleShot() belongs to no object and still fires after the parent
+    # window is gone, and fade_out() then touches a deleted QFrame -- which
+    # raises inside the event loop, where PyQt turns an unhandled exception into
+    # an abort.
+    fade_timer = QTimer(toast)
+    fade_timer.setSingleShot(True)
+    fade_timer.timeout.connect(fade_out)
+    fade_timer.start(duration_ms)

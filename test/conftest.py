@@ -10,7 +10,9 @@ already be too late. Nested conftest.py files (test/unit, test/integration, test
 mirror this same bootstrap for the same reason.
 """
 
+import atexit
 import os
+import shutil
 import sys
 import tempfile
 
@@ -29,17 +31,81 @@ os.environ["USERPROFILE"] = _bootstrap_home
 os.environ["APPDATA"] = _bootstrap_home
 os.environ["LOCALAPPDATA"] = _bootstrap_home
 os.environ["PROGRAMDATA"] = _bootstrap_home
+# The key store defaults to the per-user data directory, which on Linux is
+# XDG_DATA_HOME before it is anything under HOME.
+os.environ["XDG_DATA_HOME"] = os.path.join(_bootstrap_home, "data")
+os.environ.setdefault("PROTOKOLL_CACHE_DIR", os.path.join(_bootstrap_home, "cache"))
+
+
+def _pin_key_backup_dir() -> None:
+    """Keep automatic key backups inside whichever cache directory is in effect.
+
+    Assigned rather than defaulted: with no destination the encryptor writes the
+    backup to the first writable external drive it finds, which on a developer
+    machine is a real USB stick, and the backup holds the passphrase in the
+    clear. A developer who has this set in their own environment has it pointing
+    somewhere real, which is the case that most needs overriding.
+    """
+    os.environ["PROTOKOLL_KEY_BACKUP_DIR"] = os.path.join(
+        os.environ["PROTOKOLL_CACHE_DIR"], "key_backup"
+    )
+
+
+_pin_key_backup_dir()
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("PYTEST_QT_API", "pyqt6")
 os.environ["PROTOKOLL_TEST_ISOLATED"] = "1"
+# Anything written after a test's monkeypatched values are restored lands here
+# rather than in the real home, so the run leaves nothing outside this directory.
+atexit.register(shutil.rmtree, _bootstrap_home, True)
 
 import pytest
+
+try:
+    import src.utils.encryptor as encryptor_module
+    from src.utils.app_info_cache import AppInfoCache
+except ImportError:  # no keyring/cryptography here, so nothing can reach a real store
+    encryptor_module = None
+    AppInfoCache = None
+
+
+class FakeKeyring:
+    """In-memory stand-in for the OS credential store."""
+
+    def __init__(self):
+        self.store = {}
+
+    def get_password(self, service, key):
+        return self.store.get((service, key))
+
+    def set_password(self, service, key, value):
+        self.store[(service, key)] = value
+
+    def delete_password(self, service, key):
+        # The real backends raise when the entry is absent, and the encryptor's
+        # quiet-delete helpers rely on that.
+        if (service, key) not in self.store:
+            raise KeyError((service, key))
+        del self.store[(service, key)]
+
+
+# Substituted at import, not from the fixture below, because a test that reaches
+# the real store is now destructive: the encryptor migrates pre-consolidation
+# keychain items into a key store and deletes the originals once it reads back,
+# which would take the developer's own key material with it.
+if encryptor_module is not None:
+    encryptor_module.keyring = FakeKeyring()
+
+
+def _clear_app_info_cache_instances() -> None:
+    if AppInfoCache is not None:
+        AppInfoCache.clear_instances()
 
 
 @pytest.fixture(autouse=True)
 def isolated_app_dirs(tmp_path, monkeypatch):
     """
-    Point every per-test ConfigManager/LogDirectoryFinder instance at its own
+    Point every per-test ConfigManager/AppInfoCache instance at its own
     tmp_path, so tests never share state with each other or with the real machine.
     """
     monkeypatch.setenv("HOME", str(tmp_path))
@@ -47,6 +113,13 @@ def isolated_app_dirs(tmp_path, monkeypatch):
     monkeypatch.setenv("APPDATA", str(tmp_path))
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     monkeypatch.setenv("PROGRAMDATA", str(tmp_path))
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    # Per test, so one test's key store never meets another's keyring: the
+    # passphrase that opens a key store lives in the fixture-scoped fake keyring
+    # below, and a store left from an earlier test would outlive it. Tests that
+    # care about the backup destination set their own value over this one.
+    monkeypatch.setenv("PROTOKOLL_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("PROTOKOLL_KEY_BACKUP_DIR", str(tmp_path / "cache" / "key_backup"))
 
     real_expanduser = os.path.expanduser
     monkeypatch.setattr(
@@ -54,55 +127,48 @@ def isolated_app_dirs(tmp_path, monkeypatch):
         lambda p: str(tmp_path) if p in ("~", "~user") else real_expanduser(p)
     )
 
-    # LogDirectoryFinder.CACHE_FILE is a class attribute fixed at import time -
-    # the env vars above have no effect on it, it has to be patched directly.
-    from src.internal.log_directory_finder import LogDirectoryFinder
-    monkeypatch.setattr(LogDirectoryFinder, "CACHE_FILE", str(tmp_path / "custom_log_dirs.json"))
-
+    # AppInfoCache keeps one instance per directory for the life of the process,
+    # holding the whole cache in memory, so a test would otherwise read the cache
+    # of whichever test created that directory first.
+    _clear_app_info_cache_instances()
     yield tmp_path
+    _clear_app_info_cache_instances()
 
 
 @pytest.fixture(autouse=True)
 def fake_keyring(monkeypatch):
     """
-    Replace src.utils.encryptor's `keyring` reference with an in-memory fake so no
-    test ever touches the real OS keyring - which can hang on a headless box with
-    no backend, or silently write real secrets on a dev machine.
+    Give each test its own in-memory credential store, so no test touches the real
+    OS keyring - which can hang on a headless box with no backend, or silently
+    write real secrets on a dev machine.
     """
-    store = {}
-
-    class FakeKeyring:
-        @staticmethod
-        def get_password(service, key):
-            return store.get((service, key))
-
-        @staticmethod
-        def set_password(service, key, value):
-            store[(service, key)] = value
-
-        @staticmethod
-        def delete_password(service, key):
-            if (service, key) not in store:
-                raise KeyError((service, key))
-            del store[(service, key)]
-
-    import src.utils.encryptor as encryptor_module
-    monkeypatch.setattr(encryptor_module, "keyring", FakeKeyring)
-    return store
+    fake = FakeKeyring()
+    if encryptor_module is not None:
+        monkeypatch.setattr(encryptor_module, "keyring", fake)
+    return fake.store
 
 
 @pytest.fixture(autouse=True)
 def reset_encryptor_cache():
     """
+    Reset the encryptor's module-level state between tests.
+
     get_encryptor() memoizes (service_name, app_identifier) -> encryptor class in
-    the module-level ENCRYPTOR_CLASSES dict. Without a reset, one test's choice of
-    Standard vs. Quantum encryptor for a given namespace would leak into any later
-    test that reuses the same service_name/app_identifier.
+    ENCRYPTOR_CLASSES, and the key store and passphrase are cached per
+    (service_name, app_identifier) for the life of the process. Without a reset,
+    one test's keys and choice of Standard vs. Quantum encryptor would answer
+    another test's read, over a different tmp_path and a different fake keyring.
     """
-    import src.utils.encryptor as encryptor_module
-    encryptor_module.ENCRYPTOR_CLASSES.clear()
+    def _reset():
+        if encryptor_module is None:
+            return
+        encryptor_module.ENCRYPTOR_CLASSES.clear()
+        encryptor_module.clear_key_store_cache()
+        encryptor_module._auto_backup_warned.clear()
+
+    _reset()
     yield
-    encryptor_module.ENCRYPTOR_CLASSES.clear()
+    _reset()
 
 
 def pytest_collection_modifyitems(config, items):
