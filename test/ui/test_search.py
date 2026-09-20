@@ -17,8 +17,16 @@ import pytest
 from PyQt6.QtCore import Qt
 
 from src.internal.tracker import Tracker
+from src.utils.translations import _
 
 pytestmark = pytest.mark.ui
+def _msg_start(msgid):
+    """The literal opening of a translated message, before its first placeholder.
+
+    Assertions compare against what _() returns, so they keep working when a
+    locale is installed rather than pinning the English source.
+    """
+    return _(msgid).split("{0}")[0]
 
 
 def _select_tracker_with_log_file(window, tmp_path, content, filename="app.log"):
@@ -134,7 +142,7 @@ def test_no_matches_shows_message(qtbot, window, tmp_path):
     window.search_edit.setText("nonexistent-term")
     window.search_logs()
 
-    assert "No matches found" in window.log_viewer.toPlainText()
+    assert _msg_start("No matches found for '{0}' ({1}, {2})") in window.log_viewer.toPlainText()
 
 
 def test_search_all_files_reports_matches_across_files(qtbot, window, tmp_path):
@@ -194,7 +202,7 @@ def test_context_lines_merges_overlapping_windows_into_one_block(qtbot, window, 
     assert "line5" in result_text
     assert "line0" not in result_text
     assert "line6" not in result_text
-    assert "Found 2 matches" in result_text
+    assert _("File: {0} Found {1} matches").format("app.log", 2) in result_text
 
 
 def test_context_lines_separates_non_adjacent_blocks(qtbot, window, tmp_path):
@@ -394,7 +402,7 @@ def test_multiline_entry_counts_as_a_single_match(qtbot, window, tmp_path):
     window.search_edit.setText("connect")
     window.search_logs()
 
-    assert "Found 1 matches" in window.log_viewer.toPlainText()
+    assert _("File: {0} Found {1} matches").format("app.log", 1) in window.log_viewer.toPlainText()
 
 
 def test_multiline_disabled_returns_only_the_matching_line(qtbot, window, tmp_path):

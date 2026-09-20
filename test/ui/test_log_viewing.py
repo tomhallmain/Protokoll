@@ -4,10 +4,27 @@ that loads a selected file's content into the log viewer.
 """
 
 import os
+import re
 
 import pytest
 
+from src.utils.translations import _
+
 pytestmark = pytest.mark.ui
+
+#: The viewer's notice that only the end of a file is on screen.
+_TAIL_NOTICE = ("⏱️  Showing the last {0} of {1}. Earlier lines are not loaded - "
+                "open the file in an editor to see them.")
+
+
+def _rendered(text):
+    """Collapse runs of spaces, the way the viewer's HTML rendering does.
+
+    Messages reach the log viewer as HTML, where consecutive spaces collapse to
+    one, so a message written with two spaces after its emoji does not appear
+    on screen character for character.
+    """
+    return re.sub(r" {2,}", " ", text)
 
 
 def _assert_in(needle, haystack):
@@ -17,13 +34,22 @@ def _assert_in(needle, haystack):
     pytest's assertion rewriter introspect and print the full `in` comparison's operands
     regardless of the custom message, which is exactly the wall-of-text this is meant to avoid.
     """
-    found = needle in haystack
+    found = _rendered(needle) in _rendered(haystack)
     assert found, f"expected {needle!r} to be present (text length={len(haystack)})"
 
 
 def _assert_not_in(needle, haystack):
-    found = needle in haystack
+    found = _rendered(needle) in _rendered(haystack)
     assert not found, f"expected {needle!r} to be absent (text length={len(haystack)})"
+
+
+def _msg_start(msgid):
+    """The literal opening of a translated message, before its first placeholder.
+
+    Assertions compare against what _() returns, so they keep working when a
+    locale is installed rather than pinning the English source.
+    """
+    return _(msgid).split("{0}")[0]
 
 
 def test_display_log_file_shows_content_and_header(qtbot, window, tmp_path):
@@ -41,8 +67,8 @@ def test_display_log_file_shows_content_and_header(qtbot, window, tmp_path):
     assert "app.log" in result
     # 3 trailing-newline-terminated lines count as 4 by content.count('\n') + 1;
     # the "Unknown" placeholder header gets replaced with that once read.
-    assert "Lines: Unknown" not in result
-    assert "Lines: 4" in result
+    assert f'{_("Lines")}: {_("Unknown")}' not in result
+    assert f'{_("Lines")}: 4' in result
 
 
 def test_display_log_file_renders_ansi_codes(qtbot, window, tmp_path):
@@ -61,7 +87,7 @@ def test_display_log_file_renders_ansi_codes(qtbot, window, tmp_path):
 def test_display_log_file_shows_error_for_missing_file(qtbot, window, tmp_path):
     window.display_log_file(str(tmp_path / "does-not-exist.log"))
 
-    assert "Cannot display file" in window.log_viewer.toPlainText()
+    _assert_in(_msg_start("⚠️  Cannot display file: {0}"), window.log_viewer.toPlainText())
 
 
 def test_display_log_file_shows_error_for_binary_file(qtbot, window, tmp_path):
@@ -72,7 +98,7 @@ def test_display_log_file_shows_error_for_binary_file(qtbot, window, tmp_path):
 
     window.display_log_file(str(binary_file))
 
-    assert "Cannot display file" in window.log_viewer.toPlainText()
+    _assert_in(_msg_start("⚠️  Cannot display file: {0}"), window.log_viewer.toPlainText())
 
 
 def test_display_log_file_truncates_single_very_long_line(qtbot, window, tmp_path):
@@ -85,8 +111,8 @@ def test_display_log_file_truncates_single_very_long_line(qtbot, window, tmp_pat
     window.display_log_file(str(log_file))
 
     result = window.log_viewer.toPlainText()
-    _assert_in("Showing first 10KB", result)
-    _assert_in("truncated", result)
+    _assert_in(_("⚠️  File contains a very long line. Showing first 10KB:"), result)
+    _assert_in(_msg_start("... (truncated, original length: {0} characters)"), result)
     assert len(result) < len(long_line)
 
 
@@ -118,7 +144,7 @@ def test_display_log_file_handles_encrypted_log_without_crashing(qtbot, window, 
     window.display_log_file(str(encrypted_file))
 
     result = window.log_viewer.toPlainText()
-    _assert_in("encrypted", result.lower())
+    _assert_in(_("🔒 This log is encrypted. Viewing encrypted logs isn't supported yet."), result)
 
 
 def test_display_log_file_shows_only_the_tail_of_a_large_file(qtbot, window, tmp_path):
@@ -135,8 +161,8 @@ def test_display_log_file_shows_only_the_tail_of_a_large_file(qtbot, window, tmp
     result = window.log_viewer.toPlainText()
     _assert_in("line 01999", result)
     _assert_not_in("line 00000", result)
-    _assert_in("Showing the last", result)
-    _assert_in("Lines shown:", result)
+    _assert_in(_msg_start(_TAIL_NOTICE), result)
+    _assert_in(f'{_("Lines shown")}:', result)
 
 
 def test_display_log_file_does_not_announce_a_tail_for_a_small_file(qtbot, window, tmp_path):
@@ -149,6 +175,6 @@ def test_display_log_file_does_not_announce_a_tail_for_a_small_file(qtbot, windo
     window.display_log_file(str(log_file))
 
     result = window.log_viewer.toPlainText()
-    _assert_not_in("Showing the last", result)
-    _assert_in("Lines: 3", result)
+    _assert_not_in(_msg_start(_TAIL_NOTICE), result)
+    _assert_in(f'{_("Lines")}: 3', result)
 

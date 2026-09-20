@@ -14,6 +14,7 @@ from ..internal.tracker import Tracker
 from ..utils.config_manager import ConfigManager
 from ..utils.theme_manager import ThemeManager
 from ..utils.logging_setup import get_logger
+from ..utils.translations import _
 from ..utils.file_handler import FileHandler
 from ..utils.utils import Utils
 from .toast import show_toast
@@ -65,8 +66,8 @@ class MainWindow(QMainWindow):
         if cache_error:
             logger.error(f"MainWindow.__init__: Encrypted cache could not be read: {cache_error}")
             self.handle_error(
-                "Your trackers could not be read, and no changes will be saved until "
-                f"that is resolved.\n\n{cache_error}"
+                _("Your trackers could not be read, and no changes will be saved until "
+                  "that is resolved.") + f"\n\n{cache_error}"
             )
         
     
@@ -89,13 +90,13 @@ class MainWindow(QMainWindow):
         left_layout.setSpacing(8)
         
         # Create New Tracker button at the top
-        create_btn = QPushButton("Create New Tracker")
+        create_btn = QPushButton(_("Create New Tracker"))
         create_btn.setObjectName("createButton")
         create_btn.clicked.connect(self.create_tracker)
         left_layout.addWidget(create_btn)
         
         # Tracker section
-        tracker_label = QLabel("Trackers")
+        tracker_label = QLabel(_("Trackers"))
         tracker_label.setObjectName("sectionHeader")
         left_layout.addWidget(tracker_label)
         
@@ -112,7 +113,7 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(separator)
         
         # Log files section
-        files_label = QLabel("Log Files")
+        files_label = QLabel(_("Log Files"))
         files_label.setObjectName("sectionHeader")
         left_layout.addWidget(files_label)
         
@@ -131,9 +132,9 @@ class MainWindow(QMainWindow):
         search_layout = QHBoxLayout()
         self.search_edit = QLineEdit()
         self.search_edit.setObjectName("searchEdit")
-        self.search_edit.setPlaceholderText("Search in logs...")
+        self.search_edit.setPlaceholderText(_("Search in logs..."))
         self.search_edit.returnPressed.connect(self.search_logs)
-        search_btn = QPushButton("Search")
+        search_btn = QPushButton(_("Search"))
         search_btn.setObjectName("searchButton")
         search_btn.clicked.connect(self.search_logs)
         
@@ -144,7 +145,7 @@ class MainWindow(QMainWindow):
         self.show_line_numbers.setCheckable(True)
         self.show_line_numbers.setChecked(self.config_manager.get("search.show_line_numbers", True))
         self.show_line_numbers.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_FileDialogListView))
-        self.show_line_numbers.setToolTip("Show line numbers")
+        self.show_line_numbers.setToolTip(_("Show line numbers"))
         self.show_line_numbers.toggled.connect(self._save_search_settings)
         
         self.use_regex = QToolButton()
@@ -152,7 +153,7 @@ class MainWindow(QMainWindow):
         self.use_regex.setCheckable(True)
         self.use_regex.setChecked(self.config_manager.get("search.use_regex", False))
         self.use_regex.setText(".*")
-        self.use_regex.setToolTip("Use regular expression")
+        self.use_regex.setToolTip(_("Use regular expression"))
         self.use_regex.toggled.connect(self._save_search_settings)
         
         self.limit_to_line_start = QToolButton()
@@ -160,7 +161,7 @@ class MainWindow(QMainWindow):
         self.limit_to_line_start.setCheckable(True)
         self.limit_to_line_start.setChecked(self.config_manager.get("search.limit_to_line_start", False))
         self.limit_to_line_start.setText("^")
-        self.limit_to_line_start.setToolTip("Match only at start of log line (after level: INFO, ERROR, WARNING, DEBUG, TRACE)")
+        self.limit_to_line_start.setToolTip(_("Match only at start of log line (after level: INFO, ERROR, WARNING, DEBUG, TRACE)"))
         self.limit_to_line_start.toggled.connect(self._save_search_settings)
         
         self.search_all_files = QToolButton()
@@ -168,7 +169,7 @@ class MainWindow(QMainWindow):
         self.search_all_files.setCheckable(True)
         self.search_all_files.setChecked(self.config_manager.get("search.all_files", False))
         self.search_all_files.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_DirIcon))
-        self.search_all_files.setToolTip("Search all log files in the tracker (not just the selected file)")
+        self.search_all_files.setToolTip(_("Search all log files in the tracker (not just the selected file)"))
         self.search_all_files.toggled.connect(self._save_search_settings)
 
         self.multiline_entries = QToolButton()
@@ -177,32 +178,32 @@ class MainWindow(QMainWindow):
         self.multiline_entries.setChecked(self.config_manager.get("search.multiline_entries", True))
         self.multiline_entries.setText("¶")
         self.multiline_entries.setToolTip(
-            "Group multi-line logger calls (tracebacks, formatted messages) into single entries")
+            _("Group multi-line logger calls (tracebacks, formatted messages) into single entries"))
         self.multiline_entries.toggled.connect(self._save_search_settings)
 
         self.context_before = QSpinBox()
         self.context_before.setObjectName("contextBefore")
         self.context_before.setRange(0, 50)
         self.context_before.setValue(self.config_manager.get("search.context_before", 0))
-        self.context_before.setPrefix("B:")
-        self.context_before.setToolTip("Entries of context to show before each match")
+        self.context_before.setPrefix(_("B:"))
+        self.context_before.setToolTip(_("Entries of context to show before each match"))
         self.context_before.valueChanged.connect(self._save_search_settings)
 
         self.context_after = QSpinBox()
         self.context_after.setObjectName("contextAfter")
         self.context_after.setRange(0, 50)
         self.context_after.setValue(self.config_manager.get("search.context_after", 0))
-        self.context_after.setPrefix("A:")
-        self.context_after.setToolTip("Entries of context to show after each match")
+        self.context_after.setPrefix(_("A:"))
+        self.context_after.setToolTip(_("Entries of context to show after each match"))
         self.context_after.valueChanged.connect(self._save_search_settings)
 
         # Add Clear button
-        clear_btn = QPushButton("Clear")
+        clear_btn = QPushButton(_("Clear"))
         clear_btn.setObjectName("clearButton")
         clear_btn.clicked.connect(self.clear_search_and_reload)
         
         # Add Refresh button
-        refresh_btn = QPushButton("Refresh")
+        refresh_btn = QPushButton(_("Refresh"))
         refresh_btn.setObjectName("refreshButton")
         refresh_btn.clicked.connect(self.refresh_current_log)
         
@@ -219,28 +220,28 @@ class MainWindow(QMainWindow):
         search_layout.addWidget(self.context_after)
         
         # Open in Editor button with context menu
-        open_editor_btn = QPushButton("Open in Editor")
+        open_editor_btn = QPushButton(_("Open in Editor"))
         open_editor_btn.setObjectName("openEditorButton")
         open_editor_btn.clicked.connect(self.open_in_editor)
         
         # Create context menu for editor options
         editor_menu = QMenu(open_editor_btn)
-        default_action = editor_menu.addAction("Use Default Editor")
+        default_action = editor_menu.addAction(_("Use Default Editor"))
         default_action.triggered.connect(self.open_in_default_editor)
         
-        copy_path_action = editor_menu.addAction("Copy path to clipboard")
+        copy_path_action = editor_menu.addAction(_("Copy path to clipboard"))
         copy_path_action.triggered.connect(self.copy_log_path_to_clipboard)
         
-        custom_action = editor_menu.addAction("Configure Custom Editor...")
+        custom_action = editor_menu.addAction(_("Configure Custom Editor..."))
         custom_action.triggered.connect(self.configure_custom_editor)
         
         # Show current custom editor if configured
         custom_editor = self.config_manager.get('custom_editor_command')
         if custom_editor:
             editor_menu.addSeparator()
-            current_action = editor_menu.addAction(f"Current: {custom_editor}")
+            current_action = editor_menu.addAction(_("Current: {0}").format(custom_editor))
             current_action.setEnabled(False)
-            clear_action = editor_menu.addAction("Clear Custom Editor")
+            clear_action = editor_menu.addAction(_("Clear Custom Editor"))
             clear_action.triggered.connect(self.clear_custom_editor)
         
         open_editor_btn.setMenu(editor_menu)
@@ -350,7 +351,7 @@ class MainWindow(QMainWindow):
                     self.tracker_list.setCurrentItem(items[0])
                     
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to create tracker: {str(e)}")
+                QMessageBox.critical(self, _("Error"), _("Failed to create tracker: {0}").format(str(e)))
     
     def on_tracker_selected(self, current, previous):
         """Handle tracker selection"""
@@ -400,9 +401,12 @@ class MainWindow(QMainWindow):
             item.setData(Qt.ItemDataRole.UserRole, log_file["path"])
             
             # Add tooltip with detailed information
-            tooltip_parts = [f"Path: {log_file['path']}", f"Size: {size_info}"]
+            tooltip_parts = [
+                _("Path: {0}").format(log_file["path"]),
+                _("Size: {0}").format(size_info),
+            ]
             if log_file.get("warnings"):
-                tooltip_parts.append("Warnings:")
+                tooltip_parts.append(_("Warnings:"))
                 tooltip_parts.extend([f"  • {w}" for w in log_file["warnings"]])
             
             item.setToolTip("\n".join(tooltip_parts))
@@ -426,8 +430,8 @@ class MainWindow(QMainWindow):
         else:
             # No log files found, show message in log viewer
             self.log_viewer.clear()
-            self.append_styled_content("No log files found in the tracked directories.", color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
-            self.append_styled_content("Add directories containing log files to this tracker.", color=ThemeManager.DARK_THEME["log_viewer"]["success"])
+            self.append_styled_content(_("No log files found in the tracked directories."), color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
+            self.append_styled_content(_("Add directories containing log files to this tracker."), color=ThemeManager.DARK_THEME["log_viewer"]["success"])
         
         self.update_window_title()
     
@@ -442,7 +446,8 @@ class MainWindow(QMainWindow):
                 try:
                     last_modified = os.path.getmtime(log_file_path)
                     last_modified_str = datetime.fromtimestamp(last_modified).strftime('%Y-%m-%d %H:%M:%S')
-                    title += f" - {log_file} (Last modified: {last_modified_str})"
+                    title += " - {0} ({1}: {2})".format(
+                        log_file, _("Last modified"), last_modified_str)
                 except Exception:
                     title += f" - {log_file}"
         self.setWindowTitle(title)
@@ -472,7 +477,7 @@ class MainWindow(QMainWindow):
             # "10KB" is an approximation of log_content.MAX_LONG_LINE_CHARS, which counts
             # characters rather than bytes; change both together.
             self.append_styled_content(
-                "⚠️  File contains a very long line. Showing first 10KB:",
+                _("⚠️  File contains a very long line. Showing first 10KB:"),
                 color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
             self.log_viewer.append("\n")
 
@@ -480,7 +485,7 @@ class MainWindow(QMainWindow):
 
         if original_length is not None:
             self.append_styled_content(
-                f"\n... (truncated, original length: {original_length:,} characters)",
+                "\n" + _("... (truncated, original length: {0} characters)").format(f"{original_length:,}"),
                 color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
 
     def _load_large_file_chunked(self, content):
@@ -506,7 +511,7 @@ class MainWindow(QMainWindow):
         is_valid, reason, file_info = self.file_handler.validate_file_for_viewing(file_path)
         
         if not is_valid:
-            self.append_styled_content(f"⚠️  Cannot display file: {reason}", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
+            self.append_styled_content(_("⚠️  Cannot display file: {0}").format(reason), color=ThemeManager.DARK_THEME["log_viewer"]["error"])
             if "warnings" in file_info and file_info["warnings"]:
                 for warning in file_info["warnings"]:
                     self.append_styled_content(f"  • {warning}", color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
@@ -520,7 +525,7 @@ class MainWindow(QMainWindow):
         success, content, read_info = self.file_handler.read_tail_safe(file_path, max_load_bytes)
 
         if not success:
-            self.append_styled_content(f"❌ Error reading file: {read_info.get('error', 'Unknown error')}", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
+            self.append_styled_content(_("❌ Error reading file: {0}").format(read_info.get("error", _("Unknown error"))), color=ThemeManager.DARK_THEME["log_viewer"]["error"])
             self.log_viewer.append("\n")
             return
 
@@ -529,14 +534,14 @@ class MainWindow(QMainWindow):
             # service_name/app_identifier wiring here yet to decrypt it, so show that plainly
             # instead of feeding bytes into the str-only content handling below.
             self.append_styled_content(
-                "🔒 This log is encrypted. Viewing encrypted logs isn't supported yet.",
+                _("🔒 This log is encrypted. Viewing encrypted logs isn't supported yet."),
                 color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
             )
             self.log_viewer.append("\n")
             return
 
         is_tail = read_info.get("is_tail", False)
-        lines_label = "Lines shown" if is_tail else "Lines"
+        lines_label = _("Lines shown") if is_tail else _("Lines")
 
         # Show file information header
         last_modified = file_info.get("last_modified")
@@ -544,26 +549,33 @@ class MainWindow(QMainWindow):
         if last_modified is not None:
             try:
                 if datetime.fromtimestamp(last_modified).date() == datetime.now().date():
-                    updated_today_note = " | Updated today"
+                    updated_today_note = " | " + _("Updated today")
             except (OSError, ValueError):
                 pass
         self.append_styled_content(f"=== {os.path.basename(file_path)} ===", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
-        self.append_styled_content(f"Size: {file_info['size_human']} | {lines_label}: {file_info.get('total_lines', 'Unknown')}{updated_today_note}", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+        self.append_styled_content(
+            "{0} | {1}: {2}{3}".format(
+                _("Size: {0}").format(file_info["size_human"]),
+                lines_label,
+                file_info.get("total_lines", _("Unknown")),
+                updated_today_note),
+            color=ThemeManager.DARK_THEME["log_viewer"]["info"])
 
         if is_tail:
             # A compressed file's size on disk is not what was decompressed, so
             # only an uncompressed file can say what fraction is being shown.
             of_what = (
-                "the decompressed contents" if file_info.get("is_compressed", False)
+                _("the decompressed contents") if file_info.get("is_compressed", False)
                 else file_info["size_human"]
             )
             self.append_styled_content(
-                f"⏱️  Showing the last {read_info['shown_size_human']} of {of_what}. "
-                f"Earlier lines are not loaded - open the file in an editor to see them.",
+                _("⏱️  Showing the last {0} of {1}. Earlier lines are not loaded - "
+                  "open the file in an editor to see them.").format(
+                      read_info["shown_size_human"], of_what),
                 color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
         
         if file_info.get("is_compressed", False):
-            self.append_styled_content("📦 Compressed file detected", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+            self.append_styled_content(_("📦 Compressed file detected"), color=ThemeManager.DARK_THEME["log_viewer"]["info"])
         
         if file_info.get("warnings"):
             for warning in file_info["warnings"]:
@@ -588,8 +600,9 @@ class MainWindow(QMainWindow):
             self._update_header_line_count(
                 line_count, file_path, file_info["size_human"], updated_today_note, lines_label)
 
-    def _update_header_line_count(self, line_count: int, file_path: str = None, size_human: str = None, updated_today_note: str = "", lines_label: str = "Lines") -> None:
+    def _update_header_line_count(self, line_count: int, file_path: str = None, size_human: str = None, updated_today_note: str = "", lines_label: str = None) -> None:
         """Replace 'Lines: Unknown' in the header with the actual line count, then append the same header at the end."""
+        lines_label = lines_label or _("Lines")
         vbar = self.log_viewer.verticalScrollBar()
         scroll_value = vbar.value()
         at_bottom = scroll_value >= vbar.maximum() - 1
@@ -597,7 +610,7 @@ class MainWindow(QMainWindow):
         cursor = self.log_viewer.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.Start)
         self.log_viewer.setTextCursor(cursor)
-        if self.log_viewer.find(f"{lines_label}: Unknown"):
+        if self.log_viewer.find("{0}: {1}".format(lines_label, _("Unknown"))):
             cursor = self.log_viewer.textCursor()
             cursor.insertText(f"{lines_label}: {line_count:,}")
 
@@ -606,7 +619,10 @@ class MainWindow(QMainWindow):
             self.log_viewer.setTextCursor(cursor)
             self.log_viewer.append("\n")
             self.append_styled_content(f"=== {os.path.basename(file_path)} ===", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
-            self.append_styled_content(f"Size: {size_human} | {lines_label}: {line_count:,}{updated_today_note}", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+            self.append_styled_content(
+                "{0} | {1}: {2}{3}".format(
+                    _("Size: {0}").format(size_human), lines_label, f"{line_count:,}", updated_today_note),
+                color=ThemeManager.DARK_THEME["log_viewer"]["info"])
 
         if at_bottom:
             vbar.setValue(vbar.maximum())
@@ -655,7 +671,7 @@ class MainWindow(QMainWindow):
             try:
                 return re.compile(search_text, re.IGNORECASE), None, None
             except re.error:
-                return None, None, f"Invalid regular expression: {search_text}"
+                return None, None, _("Invalid regular expression: {0}").format(search_text)
         return None, search_text.lower(), None
 
     def _find_matches_in_content(self, content, search_re, search_text_lower):
@@ -672,12 +688,12 @@ class MainWindow(QMainWindow):
         )
 
     def _find_matches_in_file(self, log_file_path, search_re, search_text_lower):
-        is_valid, reason, _ = self.file_handler.validate_file_for_viewing(log_file_path)
+        is_valid, reason, _file_info = self.file_handler.validate_file_for_viewing(log_file_path)
         if not is_valid:
             return None, ("validation", reason)
         success, content, read_info = self.file_handler.read_file_safe(log_file_path)
         if not success:
-            return None, ("read", read_info.get('error', 'Unknown error'))
+            return None, ("read", read_info.get("error", _("Unknown error")))
         return self._find_matches_in_content(content, search_re, search_text_lower), None
 
     def _display_search_blocks(self, blocks):
@@ -702,14 +718,15 @@ class MainWindow(QMainWindow):
             self.log_viewer.append(formatted_line)
 
     def _search_scope_description(self):
-        mode = "regex" if self.use_regex.isChecked() else "plain text"
-        scope = "limit to line start" if self.limit_to_line_start.isChecked() else "full line"
+        mode = _("regex") if self.use_regex.isChecked() else _("plain text")
+        scope = _("limit to line start") if self.limit_to_line_start.isChecked() else _("full line")
         return mode, scope
 
     def _display_single_file_search_results(self, log_file_path, blocks, search_text):
         self.log_viewer.clear()
         self.append_styled_content(
-            f"File: {os.path.basename(log_file_path)} Found {log_entries.count_matches(blocks)} matches",
+            _("File: {0} Found {1} matches").format(
+                os.path.basename(log_file_path), log_entries.count_matches(blocks)),
             color=ThemeManager.DARK_THEME["log_viewer"]["info"],
         )
         self.log_viewer.append("\n")
@@ -720,23 +737,26 @@ class MainWindow(QMainWindow):
         files_with_matches = len(file_results)
         self.log_viewer.clear()
         self.append_styled_content(
-            f"Found {total_matches} matches in {files_with_matches} file(s) (searched {files_searched} file(s))",
+            _("Found {0} matches in {1} file(s) (searched {2} file(s))").format(
+                total_matches, files_with_matches, files_searched),
             color=ThemeManager.DARK_THEME["log_viewer"]["info"],
         )
         if skipped_files:
             self.append_styled_content(
-                f"Skipped {len(skipped_files)} file(s):",
+                _("Skipped {0} file(s):").format(len(skipped_files)),
                 color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
             )
             for file_path, reason in skipped_files:
                 self.append_styled_content(
-                    f"  • {os.path.basename(file_path)}: {reason}",
+                    "  • {0}: {1}".format(os.path.basename(file_path), reason),
                     color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
                 )
         self.log_viewer.append("\n")
         for file_path, blocks in file_results:
             self.append_styled_content(
-                f"=== {os.path.basename(file_path)} ({log_entries.count_matches(blocks)} match(es)) ===",
+                "=== {0} ===".format(
+                    _("{0} ({1} match(es))").format(
+                        os.path.basename(file_path), log_entries.count_matches(blocks))),
                 color=ThemeManager.DARK_THEME["log_viewer"]["info"],
             )
             self._display_search_blocks(blocks)
@@ -766,7 +786,7 @@ class MainWindow(QMainWindow):
             if not log_files:
                 self.log_viewer.clear()
                 self.append_styled_content(
-                    "No log files found in the tracked directories.",
+                    _("No log files found in the tracked directories."),
                     color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
                 )
                 return
@@ -779,7 +799,7 @@ class MainWindow(QMainWindow):
                     log_file_path, search_re, search_text_lower
                 )
                 if error:
-                    _, reason = error
+                    _error_kind, reason = error
                     skipped_files.append((log_file_path, reason))
                     continue
                 if matches:
@@ -793,17 +813,18 @@ class MainWindow(QMainWindow):
                 self.log_viewer.clear()
                 mode, scope = self._search_scope_description()
                 self.append_styled_content(
-                    f"No matches found for '{search_text}' across {len(log_files)} file(s) ({mode}, {scope})",
+                    _("No matches found for '{0}' across {1} file(s) ({2}, {3})").format(
+                        search_text, len(log_files), mode, scope),
                     color=ThemeManager.DARK_THEME["log_viewer"]["error"],
                 )
                 if skipped_files:
                     self.append_styled_content(
-                        f"Skipped {len(skipped_files)} file(s):",
+                        _("Skipped {0} file(s):").format(len(skipped_files)),
                         color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
                     )
                     for file_path, reason in skipped_files:
                         self.append_styled_content(
-                            f"  • {os.path.basename(file_path)}: {reason}",
+                            "  • {0}: {1}".format(os.path.basename(file_path), reason),
                             color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
                         )
             return
@@ -820,12 +841,12 @@ class MainWindow(QMainWindow):
             error_kind, message = error
             if error_kind == "validation":
                 self.append_styled_content(
-                    f"⚠️  Cannot search file: {message}",
+                    _("⚠️  Cannot search file: {0}").format(message),
                     color=ThemeManager.DARK_THEME["log_viewer"]["error"],
                 )
             else:
                 self.append_styled_content(
-                    f"❌ Error reading file: {message}",
+                    _("❌ Error reading file: {0}").format(message),
                     color=ThemeManager.DARK_THEME["log_viewer"]["error"],
                 )
             return
@@ -836,7 +857,7 @@ class MainWindow(QMainWindow):
             self.log_viewer.clear()
             mode, scope = self._search_scope_description()
             self.append_styled_content(
-                f"No matches found for '{search_text}' ({mode}, {scope})",
+                _("No matches found for '{0}' ({1}, {2})").format(search_text, mode, scope),
                 color=ThemeManager.DARK_THEME["log_viewer"]["error"],
             )
     
@@ -848,7 +869,7 @@ class MainWindow(QMainWindow):
         tracker_name = item.text()
         tracker = Tracker.load(tracker_name, self.config_manager)
         if not tracker:
-            QMessageBox.critical(self, "Error", f"Failed to load tracker: {tracker_name}")
+            QMessageBox.critical(self, _("Error"), _("Failed to load tracker: {0}").format(tracker_name))
             return
         
         dialog = TrackerDialog(tracker, self)
@@ -879,7 +900,7 @@ class MainWindow(QMainWindow):
                     
             except Exception as e:
                 logger.error(f"Error updating tracker: {str(e)}")
-                QMessageBox.critical(self, "Error", f"Failed to update tracker: {str(e)}")
+                QMessageBox.critical(self, _("Error"), _("Failed to update tracker: {0}").format(str(e)))
 
     def delete_tracker(self, tracker):
         """Remove a tracker, along with the app's record of where it was last read."""
@@ -887,7 +908,7 @@ class MainWindow(QMainWindow):
             self.config_manager.remove_tracker(tracker.name)
         except Exception as e:
             logger.error(f"Error deleting tracker {tracker.name}: {str(e)}")
-            QMessageBox.critical(self, "Error", f"Failed to delete tracker: {str(e)}")
+            QMessageBox.critical(self, _("Error"), _("Failed to delete tracker: {0}").format(str(e)))
             return
 
         logger.info(f"Deleted tracker: {tracker.name}")
@@ -898,7 +919,7 @@ class MainWindow(QMainWindow):
 
         self.load_trackers()
         self.update_window_title()
-        show_toast(self, f'Deleted tracker "{tracker.name}"')
+        show_toast(self, _('Deleted tracker "{0}"').format(tracker.name))
 
     def get_current_log_file_path(self):
         """Return the path of the currently selected log file, or None if none is selected."""
@@ -911,35 +932,35 @@ class MainWindow(QMainWindow):
         """Open the currently selected log file in the system's default text editor or custom editor"""
         log_file_path = self.get_current_log_file_path()
         if not log_file_path:
-            QMessageBox.information(self, "No File Selected", "Please select a log file to open in the editor.")
+            QMessageBox.information(self, _("No File Selected"), _("Please select a log file to open in the editor."))
             return
 
         # Get custom editor command from config if available
         custom_editor = self.config_manager.get('custom_editor_command')
 
         Utils.open_file_with_editor(log_file_path, custom_editor, self.handle_error)
-        show_toast(self, "Opening in editor")
+        show_toast(self, _("Opening in editor"))
 
     def open_in_default_editor(self):
         """Open the currently selected log file in the system's default text editor"""
         log_file_path = self.get_current_log_file_path()
         if not log_file_path:
-            QMessageBox.information(self, "No File Selected", "Please select a log file to open in the editor.")
+            QMessageBox.information(self, _("No File Selected"), _("Please select a log file to open in the editor."))
             return
 
         Utils.open_file_with_editor(log_file_path, None, self.handle_error)  # Use default editor
-        show_toast(self, "Opening in editor")
+        show_toast(self, _("Opening in editor"))
 
     def copy_log_path_to_clipboard(self):
         """Copy the absolute path of the currently selected log file to the clipboard."""
         log_file_path = self.get_current_log_file_path()
         if not log_file_path:
-            QMessageBox.information(self, "No File Selected", "Please select a log file to copy its path.")
+            QMessageBox.information(self, _("No File Selected"), _("Please select a log file to copy its path."))
             return
 
         absolute_path = os.path.abspath(log_file_path)
         QApplication.clipboard().setText(absolute_path)
-        show_toast(self, "Path copied to clipboard")
+        show_toast(self, _("Path copied to clipboard"))
 
     def configure_custom_editor(self):
         """Show dialog to configure custom editor command"""
@@ -947,9 +968,9 @@ class MainWindow(QMainWindow):
         
         command, ok = QLineEdit.getText(
             self, 
-            "Configure Custom Editor", 
-            "Enter custom editor command (use {filepath} as placeholder for file path):\n\n"
-            "Examples:\n"
+            _("Configure Custom Editor"),
+            _("Enter custom editor command (use {filepath} as placeholder for file path):") + "\n\n"
+            + _("Examples:") + "\n"
             "• notepad.exe {filepath}\n"
             "• code {filepath}\n"
             "• gedit {filepath}\n"
@@ -959,36 +980,36 @@ class MainWindow(QMainWindow):
         
         if ok and command.strip():
             if not Utils.editor_command_has_placeholder(command):
-                QMessageBox.warning(self, "Invalid Command",
-                                  "The command must contain {filepath} as a placeholder for the file path.")
+                QMessageBox.warning(self, _("Invalid Command"),
+                                  _("The command must contain {filepath} as a placeholder for the file path."))
                 return
 
-            executable, _ = Utils.editor_command_parts(command)
+            executable, _arguments = Utils.editor_command_parts(command)
             if not Utils.executable_available(executable):
-                reply = QMessageBox.question(self, "Executable Not Found", 
-                                           f"The executable '{executable}' was not found in your system PATH.\n"
-                                           f"Do you want to save this command anyway?",
+                reply = QMessageBox.question(self, _("Executable Not Found"),
+                                           _("The executable '{0}' was not found in your system PATH.").format(executable)
+                                           + "\n" + _("Do you want to save this command anyway?"),
                                            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
                 if reply == QMessageBox.StandardButton.No:
                     return
             
             self.config_manager.set('custom_editor_command', command.strip())
-            show_toast(self, "Custom editor saved")
+            show_toast(self, _("Custom editor saved"))
         elif ok and not command.strip():
             # User cleared the command
             self.config_manager.set('custom_editor_command', '')
-            show_toast(self, "Custom editor cleared")
+            show_toast(self, _("Custom editor cleared"))
 
     def clear_custom_editor(self):
         """Clear the custom editor command"""
-        reply = QMessageBox.question(self, "Clear Custom Editor", 
-                                   "Are you sure you want to clear the custom editor command?\n"
-                                   "This will revert to using the system default editor.",
+        reply = QMessageBox.question(self, _("Clear Custom Editor"),
+                                   _("Are you sure you want to clear the custom editor command?") + "\n"
+                                   + _("This will revert to using the system default editor."),
                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         
         if reply == QMessageBox.StandardButton.Yes:
             self.config_manager.set('custom_editor_command', '')
-            show_toast(self, "Custom editor cleared")
+            show_toast(self, _("Custom editor cleared"))
 
     def closeEvent(self, event):
         """Handle window close event"""
@@ -997,4 +1018,4 @@ class MainWindow(QMainWindow):
         super().closeEvent(event) 
 
     def handle_error(self, error_message: str):
-        QMessageBox.warning(self, "Error", error_message)
+        QMessageBox.warning(self, _("Error"), error_message)

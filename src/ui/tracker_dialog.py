@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt
 
 from ..utils.theme_manager import ThemeManager
 from ..utils.logging_setup import get_logger
+from ..utils.translations import _
 from ..internal.tracker import Tracker
 from .find_log_dirs_dialog import FindLogDirsDialog
 
@@ -30,7 +31,7 @@ class TrackerDialog(QDialog):
         self.tracker = tracker
         self.is_edit_mode = tracker is not None
         
-        self.setWindowTitle("Edit Tracker" if self.is_edit_mode else "Create New Tracker")
+        self.setWindowTitle(_("Edit Tracker") if self.is_edit_mode else _("Create New Tracker"))
         self.setModal(True)
         self.setMinimumSize(400, 300)
         
@@ -40,7 +41,7 @@ class TrackerDialog(QDialog):
         main_layout.setContentsMargins(20, 20, 20, 20)
         
         # Add header
-        header_label = QLabel("Edit Tracker" if self.is_edit_mode else "Create New Tracker")
+        header_label = QLabel(_("Edit Tracker") if self.is_edit_mode else _("Create New Tracker"))
         header_label.setObjectName("dialogHeader")
         header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(header_label)
@@ -51,10 +52,10 @@ class TrackerDialog(QDialog):
         
         # Name field
         name_layout = QHBoxLayout()
-        name_label = QLabel("Name:")
+        name_label = QLabel(_("Name:"))
         name_label.setMinimumWidth(100)
         self.name_input = QLineEdit()
-        self.name_input.setPlaceholderText("Enter tracker name")
+        self.name_input.setPlaceholderText(_("Enter tracker name"))
         if self.is_edit_mode:
             self.name_input.setText(tracker.name)
         name_layout.addWidget(name_label)
@@ -63,10 +64,10 @@ class TrackerDialog(QDialog):
         
         # Description field
         desc_layout = QHBoxLayout()
-        desc_label = QLabel("Description:")
+        desc_label = QLabel(_("Description:"))
         desc_label.setMinimumWidth(100)
         self.desc_input = QTextEdit()
-        self.desc_input.setPlaceholderText("Enter tracker description")
+        self.desc_input.setPlaceholderText(_("Enter tracker description"))
         self.desc_input.setMaximumHeight(100)
         if self.is_edit_mode:
             self.desc_input.setText(tracker.description)
@@ -75,7 +76,7 @@ class TrackerDialog(QDialog):
         form_layout.addLayout(desc_layout)
         
         # Log directories section
-        dirs_label = QLabel("Log Directories:")
+        dirs_label = QLabel(_("Log Directories:"))
         dirs_label.setObjectName("sectionHeader")
         form_layout.addWidget(dirs_label)
         
@@ -89,15 +90,15 @@ class TrackerDialog(QDialog):
         # Directory buttons
         dir_buttons_layout = QHBoxLayout()
         
-        find_btn = QPushButton("Find Directories")
+        find_btn = QPushButton(_("Find Directories"))
         find_btn.setObjectName("findButton")
         find_btn.clicked.connect(self.find_directories)
         
-        add_btn = QPushButton("Add Directory")
+        add_btn = QPushButton(_("Add Directory"))
         add_btn.setObjectName("addButton")
         add_btn.clicked.connect(self.add_directory)
         
-        remove_btn = QPushButton("Remove Directory")
+        remove_btn = QPushButton(_("Remove Directory"))
         remove_btn.setObjectName("removeButton")
         remove_btn.clicked.connect(self.remove_directory)
         
@@ -111,19 +112,19 @@ class TrackerDialog(QDialog):
         # Dialog buttons
         button_layout = QHBoxLayout()
         
-        save_btn = QPushButton("Save Changes" if self.is_edit_mode else "Create Tracker")
+        save_btn = QPushButton(_("Save Changes") if self.is_edit_mode else _("Create Tracker"))
         save_btn.setObjectName("saveButton")
         save_btn.setMinimumSize(100, 30)
         save_btn.clicked.connect(self.accept)
         
-        cancel_btn = QPushButton("Cancel")
+        cancel_btn = QPushButton(_("Cancel"))
         cancel_btn.setObjectName("cancelButton")
         cancel_btn.setMinimumSize(100, 30)
         cancel_btn.clicked.connect(self.reject)
         
         # Away from Save, and only where there is something to delete.
         if self.is_edit_mode:
-            delete_btn = QPushButton("Delete Tracker")
+            delete_btn = QPushButton(_("Delete Tracker"))
             delete_btn.setObjectName("deleteButton")
             delete_btn.setMinimumSize(100, 30)
             delete_btn.clicked.connect(self.request_delete)
@@ -157,7 +158,7 @@ class TrackerDialog(QDialog):
         """Add a new log directory."""
         directory = QFileDialog.getExistingDirectory(
             self,
-            "Select Log Directory",
+            _("Select Log Directory"),
             "",
             QFileDialog.Option.ShowDirsOnly
         )
@@ -185,10 +186,10 @@ class TrackerDialog(QDialog):
         """Confirm with the user, then close asking the caller to delete."""
         confirmation = QMessageBox.question(
             self,
-            "Delete Tracker",
-            f'Delete the tracker "{self.tracker.name}"?\n\n'
-            "This removes the tracker and the directories it watches from "
-            "Protokoll. The log files themselves are left where they are.",
+            _("Delete Tracker"),
+            _('Delete the tracker "{0}"?').format(self.tracker.name) + "\n\n"
+            + _("This removes the tracker and the directories it watches from "
+                "Protokoll. The log files themselves are left where they are."),
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -212,8 +213,8 @@ class TrackerDialog(QDialog):
         if not self.name_input.text():
             QMessageBox.warning(
                 self,
-                "Validation Error",
-                "Please enter a tracker name."
+                _("Validation Error"),
+                _("Please enter a tracker name.")
             )
             return
         
@@ -223,8 +224,8 @@ class TrackerDialog(QDialog):
             if not os.path.exists(directory):
                 QMessageBox.warning(
                     self,
-                    "Validation Error",
-                    f"Directory does not exist: {directory}"
+                    _("Validation Error"),
+                    _("Directory does not exist: {0}").format(directory)
                 )
                 return
         

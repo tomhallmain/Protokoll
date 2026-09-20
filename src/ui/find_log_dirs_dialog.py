@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal
 from ..internal.log_directory_finder import LogDirectoryFinder
 from ..utils.theme_manager import ThemeManager
 from ..utils.logging_setup import get_logger
+from ..utils.translations import _
 
 logger = get_logger('ui.find_log_dirs_dialog')
 
@@ -52,7 +53,7 @@ class FindLogDirsDialog(QDialog):
         
         logger.info(f"Initializing FindLogDirsDialog for app: {app_name}")
         
-        self.setWindowTitle(f"Find Log Directories for {app_name}")
+        self.setWindowTitle(_("Find Log Directories for {0}").format(app_name))
         self.setModal(True)
         self.setMinimumSize(600, 400)
         
@@ -62,7 +63,7 @@ class FindLogDirsDialog(QDialog):
         main_layout.setContentsMargins(20, 20, 20, 20)
         
         # Add header
-        header_label = QLabel(f"Searching for log directories...")
+        header_label = QLabel(_("Searching for log directories..."))
         header_label.setObjectName("dialogHeader")
         header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         main_layout.addWidget(header_label)
@@ -74,7 +75,7 @@ class FindLogDirsDialog(QDialog):
         
         # Results sections
         # Exact matches
-        exact_label = QLabel("Exact Matches:")
+        exact_label = QLabel(_("Exact Matches:"))
         exact_label.setObjectName("sectionHeader")
         main_layout.addWidget(exact_label)
         
@@ -84,7 +85,7 @@ class FindLogDirsDialog(QDialog):
         main_layout.addWidget(self.exact_list)
         
         # Potential matches
-        potential_label = QLabel("Potential Matches:")
+        potential_label = QLabel(_("Potential Matches:"))
         potential_label.setObjectName("sectionHeader")
         main_layout.addWidget(potential_label)
         
@@ -96,12 +97,12 @@ class FindLogDirsDialog(QDialog):
         # Buttons
         button_layout = QHBoxLayout()
         
-        select_btn = QPushButton("Add Selected")
+        select_btn = QPushButton(_("Add Selected"))
         select_btn.setObjectName("selectButton")
         select_btn.setMinimumSize(100, 30)
         select_btn.clicked.connect(self.accept)
         
-        cancel_btn = QPushButton("Cancel")
+        cancel_btn = QPushButton(_("Cancel"))
         cancel_btn.setObjectName("cancelButton")
         cancel_btn.setMinimumSize(100, 30)
         cancel_btn.clicked.connect(self.reject)
@@ -130,12 +131,12 @@ class FindLogDirsDialog(QDialog):
         # Update header
         header = self.findChild(QLabel, "dialogHeader")
         if header:
-            header.setText("Search Error")
+            header.setText(_("Search Error"))
         
         # Show error message
         QMessageBox.warning(
             self,
-            "Search Error",
+            _("Search Error"),
             error_message
         )
 
@@ -154,7 +155,8 @@ class FindLogDirsDialog(QDialog):
         # Update header
         header = self.findChild(QLabel, "dialogHeader")
         if header:
-            header.setText(f"Found {len(results['exact_matches'])} exact matches and {len(results['potential_matches'])} potential matches")
+            header.setText(_("Found {0} exact matches and {1} potential matches").format(
+                len(results["exact_matches"]), len(results["potential_matches"])))
         
         # Populate lists
         for path in results['exact_matches']:

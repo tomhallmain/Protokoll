@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import QDialog, QFileDialog, QMessageBox, QPushButton
 
 from src.internal.tracker import Tracker
 from src.ui.tracker_dialog import DELETE_REQUESTED, TrackerDialog
+from src.utils.translations import _
 
 pytestmark = pytest.mark.ui
 
@@ -259,8 +260,9 @@ def test_the_confirmation_names_the_tracker_and_spares_the_log_files(qtbot, monk
 
     dialog.request_delete()
 
-    assert "my-app" in asked[0]["text"]
-    assert "log files" in asked[0]["text"]
+    assert _('Delete the tracker "{0}"?').format("my-app") in asked[0]["text"]
+    assert _("This removes the tracker and the directories it watches from "
+             "Protokoll. The log files themselves are left where they are.") in asked[0]["text"]
     # The destructive answer is never the one a stray Enter picks.
     assert asked[0]["default"] == QMessageBox.StandardButton.No
 

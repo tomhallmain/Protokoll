@@ -6,6 +6,7 @@ from typing import Dict, List, Tuple
 
 from ..utils.config_manager import ConfigManager
 from ..utils.logging_setup import get_logger
+from ..utils.translations import _
 from ..utils.utils import Utils
 from ..utils.file_handler import FileHandler
 
@@ -106,16 +107,16 @@ class LogDirectoryFinder:
         try:
             # Validate directory exists and is accessible
             if not os.path.exists(directory):
-                return False, f"Directory does not exist: {directory}"
+                return False, _("Directory does not exist: {0}").format(directory)
             if not os.path.isdir(directory):
-                return False, f"Path is not a directory: {directory}"
+                return False, _("Path is not a directory: {0}").format(directory)
             
             # Load existing directories
             custom_dirs = LogDirectoryFinder._load_custom_directories()
             
             # Check if directory is already in the list
             if directory in custom_dirs:
-                return False, f"Directory already in custom directories: {directory}"
+                return False, _("Directory already in custom directories: {0}").format(directory)
             
             # Add directory to list
             custom_dirs.append(directory)
@@ -123,10 +124,10 @@ class LogDirectoryFinder:
             # Save updated list
             LogDirectoryFinder._save_custom_directories(custom_dirs)
             
-            return True, f"Added custom directory: {directory}"
+            return True, _("Added custom directory: {0}").format(directory)
             
         except Exception as e:
-            return False, f"Error adding custom directory: {str(e)}"
+            return False, _("Error adding custom directory: {0}").format(str(e))
     
     @staticmethod
     def remove_custom_directory(directory: str) -> Tuple[bool, str]:
@@ -145,7 +146,7 @@ class LogDirectoryFinder:
             
             # Check if directory is in the list
             if directory not in custom_dirs:
-                return False, f"Directory not found in custom directories: {directory}"
+                return False, _("Directory not found in custom directories: {0}").format(directory)
             
             # Remove directory from list
             custom_dirs.remove(directory)
@@ -153,10 +154,10 @@ class LogDirectoryFinder:
             # Save updated list
             LogDirectoryFinder._save_custom_directories(custom_dirs)
             
-            return True, f"Removed custom directory: {directory}"
+            return True, _("Removed custom directory: {0}").format(directory)
             
         except Exception as e:
-            return False, f"Error removing custom directory: {str(e)}"
+            return False, _("Error removing custom directory: {0}").format(str(e))
     
     @staticmethod
     def get_custom_directories() -> List[str]:

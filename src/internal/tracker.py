@@ -5,6 +5,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 from .log_directory_finder import LogDirectoryFinder
 from ..utils.config_manager import ConfigManager
 from ..utils.logging_setup import get_logger
+from ..utils.translations import _
 from ..utils.file_handler import FileHandler
 
 logger = get_logger('internal.tracker')
@@ -36,10 +37,10 @@ class Tracker:
     def add_log_directory(self, directory: str) -> bool:
         """Add a log directory to the tracker"""
         if not os.path.exists(directory):
-            raise ValueError(f"Directory does not exist: {directory}")
+            raise ValueError(_("Directory does not exist: {0}").format(directory))
         
         if not os.path.isdir(directory):
-            raise ValueError(f"Path is not a directory: {directory}")
+            raise ValueError(_("Path is not a directory: {0}").format(directory))
         
         # Add directory to set
         self.log_directories.add(directory)
@@ -62,9 +63,9 @@ class Tracker:
         directories = set(directories)
         for directory in directories - self.log_directories:
             if not os.path.exists(directory):
-                raise ValueError(f"Directory does not exist: {directory}")
+                raise ValueError(_("Directory does not exist: {0}").format(directory))
             if not os.path.isdir(directory):
-                raise ValueError(f"Path is not a directory: {directory}")
+                raise ValueError(_("Path is not a directory: {0}").format(directory))
 
         self.log_directories = directories
         self.save_metadata()
@@ -79,7 +80,7 @@ class Tracker:
         for directory in self.log_directories:
             try:
                 logger.debug(f"Scanning directory: {directory}")
-                for root, _, files in os.walk(directory):
+                for root, _dirs, files in os.walk(directory):
                     logger.debug(f"Scanning subdirectory: {root}")
                     for file in files:
                         file_path = os.path.join(root, file)

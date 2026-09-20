@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional, Tuple, Dict, Any, Union
 
 from .logging_setup import get_logger
+from .translations import _
 
 logger = get_logger('utils.file_handler')
 
@@ -113,7 +114,7 @@ class FileHandler:
         """Get comprehensive file information with optimizations."""
         path = Path(file_path)
         if not path.exists():
-            return {"error": "File does not exist"}
+            return {"error": _("File does not exist")}
         
         try:
             stat = path.stat()
@@ -137,9 +138,10 @@ class FileHandler:
             # the viewer reads its tail; what it cannot be is read whole, which
             # is what searching it needs.
             if file_size > self.MAX_FILE_SIZE:
-                info["warnings"].append(f"Very large file ({info['size_human']}); too large to search")
+                info["warnings"].append(
+                    _("Very large file ({0}); too large to search").format(info["size_human"]))
             elif file_size > self.WARN_FILE_SIZE:
-                info["warnings"].append(f"Large file ({info['size_human']})")
+                info["warnings"].append(_("Large file ({0})").format(info["size_human"]))
 
             # Binary detection - skipped for encrypted logs (ciphertext always looks binary
             # to the printable-ratio heuristic; decryption happens elsewhere) and for
@@ -157,10 +159,10 @@ class FileHandler:
                 except Exception as e:
                     logger.error(f"Binary detection failed: {str(e)}")
                     info["is_binary"] = True
-                    info["warnings"].append("Binary detection failed")
+                    info["warnings"].append(_("Binary detection failed"))
                 
                 if info.get("is_binary", False):
-                    info["warnings"].append("File may contain corrupted data or non-text content")
+                    info["warnings"].append(_("File may contain corrupted data or non-text content"))
             
             return info
             
@@ -217,13 +219,13 @@ class FileHandler:
         if "error" in file_info:
             return False, "", file_info
         if not file_info["is_file"]:
-            return False, "", {"error": "Not a file"}
+            return False, "", {"error": _("Not a file")}
         if not file_info["readable"]:
-            return False, "", {"error": "Not readable"}
+            return False, "", {"error": _("Not readable")}
         if file_info["size"] > max_size:
-            return False, "", {"error": f"Size exceeds limit ({file_info['size_human']})"}
+            return False, "", {"error": _("Size exceeds limit ({0})").format(file_info["size_human"])}
         if file_info.get("is_binary", False):
-            return False, "", {"error": "File may contain corrupted data or non-text content", "warnings": file_info["warnings"]}
+            return False, "", {"error": _("File may contain corrupted data or non-text content"), "warnings": file_info["warnings"]}
         
         try:
             # Encrypted logs are handled by the caller (decryption needs the app's
@@ -243,7 +245,7 @@ class FileHandler:
             return True, content, file_info
             
         except UnicodeDecodeError as e:
-            return False, "", {"error": f"Encoding error: {str(e)}"}
+            return False, "", {"error": _("Encoding error: {0}").format(str(e))}
         except Exception as e:
             logger.error(f"Read error: {str(e)}")
             return False, "", {"error": str(e)}
@@ -266,11 +268,11 @@ class FileHandler:
         if "error" in file_info:
             return False, "", file_info
         if not file_info["is_file"]:
-            return False, "", {"error": "Not a file"}
+            return False, "", {"error": _("Not a file")}
         if not file_info["readable"]:
-            return False, "", {"error": "Not readable"}
+            return False, "", {"error": _("Not readable")}
         if file_info.get("is_binary", False):
-            return False, "", {"error": "File may contain corrupted data or non-text content", "warnings": file_info["warnings"]}
+            return False, "", {"error": _("File may contain corrupted data or non-text content"), "warnings": file_info["warnings"]}
 
         # An encrypted log is a stream of length-prefixed records, which cannot be
         # read from an arbitrary offset, so it takes the whole-file path and its
@@ -307,7 +309,7 @@ class FileHandler:
             return True, self._decode_bytes(raw_content, encoding), info
 
         except UnicodeDecodeError as e:
-            return False, "", {"error": f"Encoding error: {str(e)}"}
+            return False, "", {"error": _("Encoding error: {0}").format(str(e))}
         except Exception as e:
             logger.error(f"Tail read error: {str(e)}")
             return False, "", {"error": str(e)}
@@ -362,16 +364,16 @@ class FileHandler:
         elif ext == '.zip':
             with zipfile.ZipFile(file_path, 'r') as zip_ref:
                 if not zip_ref.namelist():
-                    raise ValueError("Empty zip archive")
+                    raise ValueError(_("Empty zip archive"))
                 for name in zip_ref.namelist():
                     if self.is_log_file(name) and not name.endswith('/'):
                         with zip_ref.open(name) as f:
                             consume(f)
                         break
                 else:
-                    raise ValueError("No log files in zip")
+                    raise ValueError(_("No log files in zip"))
         else:
-            raise ValueError(f"Unsupported compression: {ext}")
+            raise ValueError(_("Unsupported compression: {0}").format(ext))
 
         return bytes(tail), is_tail
 
@@ -391,7 +393,7 @@ class FileHandler:
         elif ext == '.zip':
             with zipfile.ZipFile(file_path, 'r') as zip_ref:
                 if not zip_ref.namelist():
-                    raise ValueError("Empty zip archive")
+                    raise ValueError(_("Empty zip archive"))
                 
                 for name in zip_ref.namelist():
                     if self.is_log_file(name) and not name.endswith('/'):
@@ -405,9 +407,9 @@ class FileHandler:
                                 return content.decode('utf-8', errors='replace')
                             return content.decode('utf-8', errors='replace')
                 
-                raise ValueError("No log files in zip")
+                raise ValueError(_("No log files in zip"))
         
-        raise ValueError(f"Unsupported compression: {ext}")
+        raise ValueError(_("Unsupported compression: {0}").format(ext))
     
     def _detect_encoding(self, sample: bytes) -> str:
         """Detect encoding with null byte awareness."""
@@ -500,12 +502,12 @@ class FileHandler:
             return False, file_info["error"], file_info
         
         if not file_info["is_file"]:
-            return False, "Path is not a file", file_info
+            return False, _("Path is not a file"), file_info
         
         if not file_info["readable"]:
-            return False, "File is not readable", file_info
+            return False, _("File is not readable"), file_info
         
         if file_info.get("is_binary", False):
-            return False, "File may contain corrupted data or non-text content", file_info
+            return False, _("File may contain corrupted data or non-text content"), file_info
         
-        return True, "File is valid for viewing", file_info 
+        return True, _("File is valid for viewing"), file_info 

@@ -707,6 +707,10 @@ class Utils:
             bool: True if the command was successfully started (not necessarily completed), False if there was an immediate error
         """
         def run_editor():
+            # Imported here rather than at module scope: translations imports this
+            # module to look up the default language.
+            from .translations import _
+
             try:
                 if custom_command:
                     command = custom_command.replace(Utils.EDITOR_FILEPATH_PLACEHOLDER, filepath)
@@ -716,10 +720,9 @@ class Utils:
                     
                     # Check if executable exists
                     if not Utils.executable_available(executable):
-                        error_msg = f"Executable not found: {executable}"
-                        logger.error(error_msg)
+                        logger.error(f"Executable not found: {executable}")
                         if error_callback:
-                            error_callback(error_message=error_msg)
+                            error_callback(error_message=_("Executable not found: {0}").format(executable))
                         return
                     
                     # Run the custom command
@@ -737,20 +740,17 @@ class Utils:
                     logger.info(f"Successfully opened file with default editor: {filepath}")
                         
             except subprocess.CalledProcessError as e:
-                error_msg = f"Failed to open file with editor: {str(e)}"
-                logger.error(error_msg)
+                logger.error(f"Failed to open file with editor: {str(e)}")
                 if error_callback:
-                    error_callback(error_message=error_msg)
+                    error_callback(error_message=_("Failed to open file with editor: {0}").format(str(e)))
             except FileNotFoundError as e:
-                error_msg = f"Editor not found: {str(e)}"
-                logger.error(error_msg)
+                logger.error(f"Editor not found: {str(e)}")
                 if error_callback:
-                    error_callback(error_message=error_msg)
+                    error_callback(error_message=_("Editor not found: {0}").format(str(e)))
             except Exception as e:
-                error_msg = f"Unexpected error opening file: {str(e)}"
-                logger.error(error_msg)
+                logger.error(f"Unexpected error opening file: {str(e)}")
                 if error_callback:
-                    error_callback(error_message=error_msg)
+                    error_callback(error_message=_("Unexpected error opening file: {0}").format(str(e)))
         
         # Start the editor in a separate thread
         thread = threading.Thread(target=run_editor, daemon=True)
