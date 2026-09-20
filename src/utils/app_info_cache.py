@@ -230,6 +230,13 @@ class AppInfoCache:
             self._cache[AppInfoCache.INFO_KEY][key] = value
             self._dirty = True
 
+    def remove(self, key: str) -> None:
+        with self._lock:
+            info = self._cache.get(AppInfoCache.INFO_KEY, {})
+            if key in info:
+                del info[key]
+                self._dirty = True
+
     def get(self, key: str, default_val: Any = None) -> Any:
         with self._lock:
             info = self._cache.get(AppInfoCache.INFO_KEY, {})

@@ -130,6 +130,32 @@ def test_saving_a_tracker_under_a_new_name_drops_the_old_entry(config_manager):
     assert config_manager.get_tracker_metadata("my-app") is None
 
 
+def test_remove_tracker_forgets_the_state_pointing_at_it(config_manager):
+    config_manager.save_tracker_metadata("my-app", {"name": "my-app"})
+    config_manager.add_recent_tracker("my-app")
+    config_manager.add_recent_tracker("other-app")
+    config_manager.set("last_tracker", "my-app")
+    config_manager.set(ConfigManager.last_log_file_key("my-app"), "/var/log/my-app/app.log")
+
+    config_manager.remove_tracker("my-app")
+
+    assert config_manager.list_tracker_names() == []
+    assert config_manager.get("recent_trackers") == ["other-app"]
+    assert config_manager.get("last_tracker") is None
+    assert config_manager.get(ConfigManager.last_log_file_key("my-app")) is None
+
+
+def test_remove_tracker_leaves_the_other_trackers_alone(config_manager):
+    config_manager.save_tracker_metadata("my-app", {"name": "my-app"})
+    config_manager.save_tracker_metadata("other-app", {"name": "other-app"})
+    config_manager.set("last_tracker", "other-app")
+
+    config_manager.remove_tracker("my-app")
+
+    assert config_manager.list_tracker_names() == ["other-app"]
+    assert config_manager.get("last_tracker") == "other-app"
+
+
 def test_legacy_plaintext_state_is_migrated_into_the_cache(tmp_path):
     config_dir = tmp_path / ".protokoll"
     config_dir.mkdir(parents=True)

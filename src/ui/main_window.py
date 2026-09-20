@@ -17,7 +17,7 @@ from ..utils.logging_setup import get_logger
 from ..utils.file_handler import FileHandler
 from ..utils.utils import Utils
 from .toast import show_toast
-from .tracker_dialog import TrackerDialog
+from .tracker_dialog import DELETE_REQUESTED, TrackerDialog
 
 logger = get_logger('ui.main_window')
 
@@ -382,7 +382,8 @@ class MainWindow(QMainWindow):
         # Sort log files by last modified time, most recent first
         log_files.sort(key=lambda x: x["last_modified"], reverse=True)
         
-        last_selected = self.config_manager.get(f"last_log_file_{self.current_tracker.name}")
+        last_selected = self.config_manager.get(
+            ConfigManager.last_log_file_key(self.current_tracker.name))
         selected_row = None
         for idx, log_file in enumerate(log_files):
             # Create display text with file info
@@ -416,7 +417,8 @@ class MainWindow(QMainWindow):
         if selected_row is None and log_files:
             selected_row = 0
             # Save this as the last selected file
-            self.config_manager.set(f"last_log_file_{self.current_tracker.name}", log_files[0]["path"])
+            self.config_manager.set(
+                ConfigManager.last_log_file_key(self.current_tracker.name), log_files[0]["path"])
         
         # Pre-select the appropriate log file
         if selected_row is not None:
@@ -452,7 +454,7 @@ class MainWindow(QMainWindow):
             return
         # Save last selected log file for this tracker
         if self.current_tracker:
-            tracker_key = f"last_log_file_{self.current_tracker.name}"
+            tracker_key = ConfigManager.last_log_file_key(self.current_tracker.name)
             self.config_manager.set(tracker_key, log_file_path)
         self.display_log_file(log_file_path)
         self.update_window_title()
@@ -850,7 +852,14 @@ class MainWindow(QMainWindow):
             return
         
         dialog = TrackerDialog(tracker, self)
-        if dialog.exec():
+        result = dialog.exec()
+
+        if result == DELETE_REQUESTED:
+            # The dialog has already confirmed this with the user.
+            self.delete_tracker(tracker)
+            return
+
+        if result:
             data = dialog.get_tracker_data()
             try:
                 # Update tracker properties
@@ -871,6 +880,25 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 logger.error(f"Error updating tracker: {str(e)}")
                 QMessageBox.critical(self, "Error", f"Failed to update tracker: {str(e)}")
+
+    def delete_tracker(self, tracker):
+        """Remove a tracker, along with the app's record of where it was last read."""
+        try:
+            self.config_manager.remove_tracker(tracker.name)
+        except Exception as e:
+            logger.error(f"Error deleting tracker {tracker.name}: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to delete tracker: {str(e)}")
+            return
+
+        logger.info(f"Deleted tracker: {tracker.name}")
+        if self.current_tracker and self.current_tracker.name == tracker.name:
+            self.current_tracker = None
+            self.files_list.clear()
+            self.log_viewer.clear()
+
+        self.load_trackers()
+        self.update_window_title()
+        show_toast(self, f'Deleted tracker "{tracker.name}"')
 
     def get_current_log_file_path(self):
         """Return the path of the currently selected log file, or None if none is selected."""

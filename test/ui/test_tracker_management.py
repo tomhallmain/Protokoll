@@ -11,6 +11,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QMessageBox
 
 from src.internal.tracker import Tracker
+from src.ui.tracker_dialog import DELETE_REQUESTED
 
 pytestmark = pytest.mark.ui
 
@@ -158,3 +159,91 @@ def test_load_trackers_selects_last_used_tracker(qtbot, window):
     window.load_trackers()
 
     assert window.tracker_list.currentItem().text() == "tracker-b"
+
+
+# ---------------------------------------------------------------------------
+# Deleting a tracker from the edit dialog
+# ---------------------------------------------------------------------------
+
+
+def _deleting_tracker_dialog_class():
+    """A TrackerDialog stand-in that reports a confirmed deletion."""
+
+    class FakeTrackerDialog:
+        def __init__(self, tracker=None, parent=None):
+            self.tracker = tracker
+
+        def exec(self):
+            return DELETE_REQUESTED
+
+    return FakeTrackerDialog
+
+
+def _tracker_with_a_log_file(window, tmp_path, name="my-app"):
+    log_dir = tmp_path / f"{name}-logs"
+    log_dir.mkdir()
+    log_file = log_dir / "app.log"
+    log_file.write_bytes(b"line one\n")
+    tracker = Tracker(name, "a description", window.config_manager)
+    tracker.add_log_directory(str(log_dir))
+    window.load_trackers()
+    return log_file
+
+
+def test_edit_tracker_deletes_when_the_dialog_asks_for_it(qtbot, window, tmp_path, monkeypatch):
+    log_file = _tracker_with_a_log_file(window, tmp_path)
+    item = window.tracker_list.findItems("my-app", Qt.MatchFlag.MatchExactly)[0]
+    monkeypatch.setattr("src.ui.main_window.TrackerDialog", _deleting_tracker_dialog_class())
+
+    window.edit_tracker(item)
+
+    assert window.tracker_list.findItems("my-app", Qt.MatchFlag.MatchExactly) == []
+    assert Tracker.load("my-app", window.config_manager) is None
+    # The tracker was a record of where to look, and only that record is gone.
+    assert log_file.exists()
+
+
+def test_deleting_the_selected_tracker_clears_what_it_was_showing(qtbot, window, tmp_path, monkeypatch):
+    _tracker_with_a_log_file(window, tmp_path)
+    item = window.tracker_list.findItems("my-app", Qt.MatchFlag.MatchExactly)[0]
+    window.tracker_list.setCurrentItem(item)
+    assert window.current_tracker is not None
+    monkeypatch.setattr("src.ui.main_window.TrackerDialog", _deleting_tracker_dialog_class())
+
+    window.edit_tracker(item)
+
+    assert window.current_tracker is None
+    assert window.files_list.count() == 0
+
+
+def test_deleting_a_tracker_forgets_where_it_was_left(qtbot, window, tmp_path, monkeypatch):
+    """A deleted tracker left in the last-used state would be selected again on
+    the next launch, or listed as recent with nothing behind it."""
+    _tracker_with_a_log_file(window, tmp_path)
+    window.config_manager.add_recent_tracker("my-app")
+    window.config_manager.set("last_tracker", "my-app")
+    item = window.tracker_list.findItems("my-app", Qt.MatchFlag.MatchExactly)[0]
+    window.tracker_list.setCurrentItem(item)
+    monkeypatch.setattr("src.ui.main_window.TrackerDialog", _deleting_tracker_dialog_class())
+
+    window.edit_tracker(item)
+
+    assert window.config_manager.get("recent_trackers", []) == []
+    assert window.config_manager.get("last_tracker") is None
+    assert window.config_manager.get(
+        window.config_manager.last_log_file_key("my-app")) is None
+
+
+def test_editing_a_tracker_without_a_delete_leaves_it_alone(qtbot, window, tmp_path, monkeypatch):
+    """The dialog's other outcomes must not be mistaken for the new one."""
+    _tracker_with_a_log_file(window, tmp_path)
+    item = window.tracker_list.findItems("my-app", Qt.MatchFlag.MatchExactly)[0]
+    monkeypatch.setattr(
+        "src.ui.main_window.TrackerDialog",
+        _fake_tracker_dialog_class({}, accepted=False),
+    )
+
+    window.edit_tracker(item)
+
+    assert Tracker.load("my-app", window.config_manager) is not None
+

@@ -12,6 +12,18 @@ from .find_log_dirs_dialog import FindLogDirsDialog
 
 logger = get_logger('ui.tracker_dialog')
 
+#: exec() result asking the caller to delete the tracker being edited. QDialog
+#: itself uses 0 for rejected and 1 for accepted; this is the third outcome
+#: editing can end in. The dialog confirms the deletion with the user but does
+#: not carry it out - the tracker list and the current selection belong to the
+#: window that opened it.
+#:
+#: A module constant rather than a class attribute so that a caller reads it
+#: from here, not through its own reference to TrackerDialog, which tests
+#: replace with a stand-in.
+DELETE_REQUESTED = 2
+
+
 class TrackerDialog(QDialog):
     def __init__(self, tracker: Tracker = None, parent=None):
         super().__init__(parent)
@@ -109,6 +121,14 @@ class TrackerDialog(QDialog):
         cancel_btn.setMinimumSize(100, 30)
         cancel_btn.clicked.connect(self.reject)
         
+        # Away from Save, and only where there is something to delete.
+        if self.is_edit_mode:
+            delete_btn = QPushButton("Delete Tracker")
+            delete_btn.setObjectName("deleteButton")
+            delete_btn.setMinimumSize(100, 30)
+            delete_btn.clicked.connect(self.request_delete)
+            button_layout.addWidget(delete_btn)
+        
         button_layout.addStretch()
         button_layout.addWidget(cancel_btn)
         button_layout.addWidget(save_btn)
@@ -161,6 +181,24 @@ class TrackerDialog(QDialog):
         else:
             logger.debug("No directory selected for removal")
     
+    def request_delete(self):
+        """Confirm with the user, then close asking the caller to delete."""
+        confirmation = QMessageBox.question(
+            self,
+            "Delete Tracker",
+            f'Delete the tracker "{self.tracker.name}"?\n\n'
+            "This removes the tracker and the directories it watches from "
+            "Protokoll. The log files themselves are left where they are.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if confirmation == QMessageBox.StandardButton.Yes:
+            logger.info(f"Deletion confirmed for tracker: {self.tracker.name}")
+            self.done(DELETE_REQUESTED)
+        else:
+            logger.debug(f"Deletion cancelled for tracker: {self.tracker.name}")
+
     def get_tracker_data(self) -> dict:
         """Get the tracker data from the dialog."""
         return {

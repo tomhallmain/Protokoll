@@ -252,6 +252,19 @@ class ThemeManager:
             #createButton:pressed {{
                 background-color: {dialog["primary_button"]["pressed"]};
             }}
+            
+            #deleteButton {{
+                background-color: transparent;
+                color: {cls.DARK_THEME["log_viewer"]["error"]};
+                border: 1px solid {cls.DARK_THEME["log_viewer"]["error"]};
+                border-radius: 4px;
+                padding: 6px 12px;
+            }}
+            
+            #deleteButton:hover {{
+                background-color: {cls.DARK_THEME["log_viewer"]["error"]};
+                color: {cls.DARK_THEME["bright_text"]};
+            }}
         """ 
 
 

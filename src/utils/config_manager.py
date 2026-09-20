@@ -25,7 +25,8 @@ class ConfigManager:
 
     #: Keys held in the encrypted cache rather than config.json.
     CACHE_KEYS = frozenset({"recent_trackers", "last_tracker"})
-    CACHE_KEY_PREFIXES = ("last_log_file_",)
+    LAST_LOG_FILE_PREFIX = "last_log_file_"
+    CACHE_KEY_PREFIXES = (LAST_LOG_FILE_PREFIX,)
     CUSTOM_LOG_DIRS_KEY = "custom_log_directories"
 
     LEGACY_TRACKERS_DIRNAME = "trackers"
@@ -166,8 +167,27 @@ class ConfigManager:
         self.app_info_cache.set_tracker(name, metadata)
         self.app_info_cache.store()
 
+    @classmethod
+    def last_log_file_key(cls, tracker_name: str) -> str:
+        """Key under which the log file last viewed for *tracker_name* is kept."""
+        return f"{cls.LAST_LOG_FILE_PREFIX}{tracker_name}"
+
     def remove_tracker(self, name: str) -> None:
+        """Remove a tracker and the state pointing at it.
+
+        The tracked directories and the log files in them are not touched: a
+        tracker is this app's own record of where to look.
+        """
         self.app_info_cache.remove_tracker(name)
+        self.app_info_cache.remove(self.last_log_file_key(name))
+
+        recent = self.app_info_cache.get('recent_trackers', [])
+        if name in recent:
+            self.app_info_cache.set(
+                'recent_trackers', [tracker for tracker in recent if tracker != name])
+        if self.app_info_cache.get('last_tracker') == name:
+            self.app_info_cache.remove('last_tracker')
+
         self.app_info_cache.store()
 
     def list_tracker_names(self) -> List[str]:

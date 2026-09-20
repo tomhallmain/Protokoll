@@ -8,10 +8,10 @@ dialog and block a headless test run waiting for a user who isn't there.
 """
 
 import pytest
-from PyQt6.QtWidgets import QDialog, QFileDialog, QMessageBox
+from PyQt6.QtWidgets import QDialog, QFileDialog, QMessageBox, QPushButton
 
 from src.internal.tracker import Tracker
-from src.ui.tracker_dialog import TrackerDialog
+from src.ui.tracker_dialog import DELETE_REQUESTED, TrackerDialog
 
 pytestmark = pytest.mark.ui
 
@@ -198,3 +198,69 @@ def test_accept_succeeds_with_valid_data(qtbot, tmp_path):
     dialog.accept()
 
     assert dialog.result() == QDialog.DialogCode.Accepted
+
+
+# ---------------------------------------------------------------------------
+# Deleting a tracker: offered while editing one, and confirmed first
+# ---------------------------------------------------------------------------
+
+
+def _fake_question(answer, recorder=None):
+    """Stand in for the confirmation box, answering *answer* without showing it."""
+    def question(parent, title, text, buttons=None, default_button=None):
+        if recorder is not None:
+            recorder.append({"title": title, "text": text, "default": default_button})
+        return answer
+    return staticmethod(question)
+
+
+def test_edit_mode_offers_deletion(qtbot):
+    dialog = TrackerDialog(tracker=Tracker("my-app"))
+    qtbot.addWidget(dialog)
+
+    assert dialog.findChild(QPushButton, "deleteButton") is not None
+
+
+def test_create_mode_has_nothing_to_delete(qtbot):
+    dialog = TrackerDialog()
+    qtbot.addWidget(dialog)
+
+    assert dialog.findChild(QPushButton, "deleteButton") is None
+
+
+def test_confirmed_deletion_ends_the_dialog_asking_for_it(qtbot, monkeypatch):
+    monkeypatch.setattr(QMessageBox, "question", _fake_question(QMessageBox.StandardButton.Yes))
+    dialog = TrackerDialog(tracker=Tracker("my-app"))
+    qtbot.addWidget(dialog)
+
+    dialog.request_delete()
+
+    assert dialog.result() == DELETE_REQUESTED
+
+
+def test_declined_deletion_leaves_the_dialog_as_it_was(qtbot, monkeypatch):
+    monkeypatch.setattr(QMessageBox, "question", _fake_question(QMessageBox.StandardButton.No))
+    dialog = TrackerDialog(tracker=Tracker("my-app"))
+    qtbot.addWidget(dialog)
+
+    dialog.request_delete()
+
+    assert dialog.result() != DELETE_REQUESTED
+
+
+def test_the_confirmation_names_the_tracker_and_spares_the_log_files(qtbot, monkeypatch):
+    """Deleting a tracker deletes a record of where to look, and the prompt has
+    to say so - the same words would otherwise read as deleting the logs."""
+    asked = []
+    monkeypatch.setattr(
+        QMessageBox, "question", _fake_question(QMessageBox.StandardButton.No, asked))
+    dialog = TrackerDialog(tracker=Tracker("my-app"))
+    qtbot.addWidget(dialog)
+
+    dialog.request_delete()
+
+    assert "my-app" in asked[0]["text"]
+    assert "log files" in asked[0]["text"]
+    # The destructive answer is never the one a stray Enter picks.
+    assert asked[0]["default"] == QMessageBox.StandardButton.No
+

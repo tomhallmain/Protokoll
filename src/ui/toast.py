@@ -18,6 +18,12 @@ def show_toast(parent, message, duration_ms=2500):
         message: Text to display in the toast.
         duration_ms: How long to show the toast before fading out, in milliseconds.
     """
+    if not parent.isVisible():
+        # Nothing to show it over. The fade would come due seconds later, by
+        # which time the parent can be closed or freed, and what runs then has
+        # no safe way to find that out - see below.
+        return
+
     theme = ThemeManager.DARK_THEME
     base = theme["base"]
     text_color = theme["text"]
@@ -56,27 +62,27 @@ def show_toast(parent, message, duration_ms=2500):
     toast.raise_()
     toast.show()
 
-    def fade_out():
-        effect = QGraphicsOpacityEffect(toast)
-        toast.setGraphicsEffect(effect)
-        # Parented to the toast, so a parent closing mid-fade takes the
-        # animation with it instead of leaving it driving a deleted object.
-        animation = QPropertyAnimation(effect, b"opacity", toast)
-        animation.setDuration(300)
-        animation.setStartValue(1.0)
-        animation.setEndValue(0.0)
-        animation.setEasingCurve(QEasingCurve.Type.OutCubic)
-        animation.finished.connect(toast.deleteLater)
-        toast._animation = animation
-        toast._effect = effect
-        animation.start()
+    # The fade is built now, while the toast is known to be alive, and wired up
+    # entirely between objects: the timer starts the animation, the animation
+    # deletes the toast. Every piece is parented to the toast, so destroying it
+    # destroys them and nothing is left to fire.
+    #
+    # The delay deliberately schedules no Python of its own. A function called
+    # back seconds later still holds the widget, and by then Qt may have freed
+    # it without PyQt noticing -- sip.isdeleted() then reports the wrapper as
+    # live and the first attribute touched is an access violation, which no
+    # amount of checking inside that function can catch.
+    effect = QGraphicsOpacityEffect(toast)
+    toast.setGraphicsEffect(effect)
 
-    # A child of the toast, so destroying the toast cancels it. A bare
-    # QTimer.singleShot() belongs to no object and still fires after the parent
-    # window is gone, and fade_out() then touches a deleted QFrame -- which
-    # raises inside the event loop, where PyQt turns an unhandled exception into
-    # an abort.
+    fade = QPropertyAnimation(effect, b"opacity", toast)
+    fade.setDuration(300)
+    fade.setStartValue(1.0)
+    fade.setEndValue(0.0)
+    fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+    fade.finished.connect(toast.deleteLater)
+
     fade_timer = QTimer(toast)
     fade_timer.setSingleShot(True)
-    fade_timer.timeout.connect(fade_out)
+    fade_timer.timeout.connect(fade.start)
     fade_timer.start(duration_ms)
