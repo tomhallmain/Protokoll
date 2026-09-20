@@ -24,7 +24,7 @@ def test_create_mode_starts_empty(qtbot):
     assert dialog.name_input.text() == ""
     assert dialog.desc_input.toPlainText() == ""
     assert dialog.dirs_list.count() == 0
-    assert dialog.windowTitle() == "Create New Tracker"
+    assert dialog.windowTitle() == _("Create New Tracker")
 
 
 def test_edit_mode_prefills_from_tracker(qtbot, tmp_path):
@@ -40,7 +40,7 @@ def test_edit_mode_prefills_from_tracker(qtbot, tmp_path):
     assert dialog.desc_input.toPlainText() == "a description"
     assert dialog.dirs_list.count() == 1
     assert dialog.dirs_list.item(0).text() == str(log_dir)
-    assert dialog.windowTitle() == "Edit Tracker"
+    assert dialog.windowTitle() == _("Edit Tracker")
 
 
 def test_get_tracker_data_reflects_current_form_state(qtbot, tmp_path):

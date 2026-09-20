@@ -1,0 +1,587 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: 1.0\n"
+"POT-Creation-Date: 2026-09-19 21:31-0400\n"
+"PO-Revision-Date: 2026-09-19 21:31-0400\n"
+"Last-Translator: Translator Name <translator@example.com>\n"
+"Language-Team: fr Team <<EMAIL>>\n"
+"Language: fr\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/internal/log_directory_finder.py:110 src/internal/tracker.py:40
+#: src/internal/tracker.py:66 src/ui/tracker_dialog.py:228
+msgid "Directory does not exist: {0}"
+msgstr "Le répertoire n'existe pas : {0}"
+
+#: src/internal/log_directory_finder.py:112 src/internal/tracker.py:43
+#: src/internal/tracker.py:68
+msgid "Path is not a directory: {0}"
+msgstr "Le chemin n'est pas un répertoire : {0}"
+
+#: src/internal/log_directory_finder.py:119
+msgid "Directory already in custom directories: {0}"
+msgstr "Répertoire déjà présent dans les répertoires personnalisés : {0}"
+
+#: src/internal/log_directory_finder.py:127
+msgid "Added custom directory: {0}"
+msgstr "Répertoire personnalisé ajouté : {0}"
+
+#: src/internal/log_directory_finder.py:130
+msgid "Error adding custom directory: {0}"
+msgstr "Erreur lors de l'ajout du répertoire personnalisé : {0}"
+
+#: src/internal/log_directory_finder.py:149
+msgid "Directory not found in custom directories: {0}"
+msgstr "Répertoire introuvable dans les répertoires personnalisés : {0}"
+
+#: src/internal/log_directory_finder.py:157
+msgid "Removed custom directory: {0}"
+msgstr "Répertoire personnalisé supprimé : {0}"
+
+#: src/internal/log_directory_finder.py:160
+msgid "Error removing custom directory: {0}"
+msgstr "Erreur lors de la suppression du répertoire personnalisé: {0}"
+
+#: src/ui/find_log_dirs_dialog.py:56
+msgid "Find Log Directories for {0}"
+msgstr "Rechercher les répertoires de journal pour {0}"
+
+#: src/ui/find_log_dirs_dialog.py:66
+msgid "Searching for log directories..."
+msgstr "Recherche des répertoires de journaux..."
+
+#: src/ui/find_log_dirs_dialog.py:78
+msgid "Exact Matches:"
+msgstr "Correspondances exactes:"
+
+#: src/ui/find_log_dirs_dialog.py:88
+msgid "Potential Matches:"
+msgstr "Correspondances potentielles :"
+
+#: src/ui/find_log_dirs_dialog.py:100
+msgid "Add Selected"
+msgstr "Ajouter la sélection"
+
+#: src/ui/find_log_dirs_dialog.py:105 src/ui/tracker_dialog.py:120
+msgid "Cancel"
+msgstr "Annuler"
+
+#: src/ui/find_log_dirs_dialog.py:134 src/ui/find_log_dirs_dialog.py:139
+msgid "Search Error"
+msgstr "Erreur de recherche"
+
+#: src/ui/find_log_dirs_dialog.py:158
+msgid "Found {0} exact matches and {1} potential matches"
+msgstr ""
+"Trouvé {0} correspondances exactes et {1} correspondances potentielles"
+
+#: src/ui/main_window.py:69
+msgid ""
+"Your trackers could not be read, and no changes will be saved until that is "
+"resolved."
+msgstr ""
+"Vos traceurs n'ont pas pu être lus et aucune modification ne sera "
+"enregistrée tant que le problème n'est pas résolu."
+
+#: src/ui/main_window.py:93 src/ui/tracker_dialog.py:34
+#: src/ui/tracker_dialog.py:44
+msgid "Create New Tracker"
+msgstr "Créer un nouveau tracker"
+
+#: src/ui/main_window.py:99
+msgid "Trackers"
+msgstr "Traceurs"
+
+#: src/ui/main_window.py:116
+msgid "Log Files"
+msgstr "Fichiers journaux"
+
+#: src/ui/main_window.py:135
+msgid "Search in logs..."
+msgstr "Rechercher dans les journaux..."
+
+#: src/ui/main_window.py:137
+msgid "Search"
+msgstr "Rechercher"
+
+#: src/ui/main_window.py:148
+msgid "Show line numbers"
+msgstr "Afficher les numéros de ligne"
+
+#: src/ui/main_window.py:156
+msgid "Use regular expression"
+msgstr "Utiliser une expression régulière"
+
+#: src/ui/main_window.py:164
+msgid ""
+"Match only at start of log line (after level: INFO, ERROR, WARNING, DEBUG, "
+"TRACE)"
+msgstr ""
+"Correspond uniquement au début de la ligne de log (après le niveau : INFO, "
+"ERROR, WARNING, DEBUG, TRACE)"
+
+#: src/ui/main_window.py:172
+msgid "Search all log files in the tracker (not just the selected file)"
+msgstr ""
+"Rechercher dans tous les fichiers journaux du tracker (pas seulement le "
+"fichier sélectionné)"
+
+#: src/ui/main_window.py:181
+msgid ""
+"Group multi-line logger calls (tracebacks, formatted messages) into single "
+"entries"
+msgstr ""
+"Regrouper les appels de journalisation multilignes (tracebacks, messages "
+"formatés) en une seule entrée"
+
+#: src/ui/main_window.py:188
+msgid "B:"
+msgstr "B:"
+
+#: src/ui/main_window.py:189
+msgid "Entries of context to show before each match"
+msgstr "Entrées de contexte à afficher avant chaque correspondance"
+
+#: src/ui/main_window.py:196
+msgid "A:"
+msgstr "A:"
+
+#: src/ui/main_window.py:197
+msgid "Entries of context to show after each match"
+msgstr "Entrées de contexte à afficher après chaque correspondance"
+
+#: src/ui/main_window.py:201
+msgid "Clear"
+msgstr "Effacer"
+
+#: src/ui/main_window.py:206
+msgid "Refresh"
+msgstr "Rafraîchir"
+
+#: src/ui/main_window.py:223
+msgid "Open in Editor"
+msgstr "Ouvrir dans l'éditeur"
+
+#: src/ui/main_window.py:229
+msgid "Use Default Editor"
+msgstr "Utiliser l'éditeur par défaut"
+
+#: src/ui/main_window.py:232
+msgid "Copy path to clipboard"
+msgstr "Copier le chemin dans le presse‑papiers"
+
+#: src/ui/main_window.py:235
+msgid "Configure Custom Editor..."
+msgstr "Configurer l'éditeur personnalisé..."
+
+#: src/ui/main_window.py:242
+msgid "Current: {0}"
+msgstr "Actuel : {0}"
+
+#: src/ui/main_window.py:244 src/ui/main_window.py:1005
+msgid "Clear Custom Editor"
+msgstr "Effacer l'éditeur personnalisé"
+
+#: src/ui/main_window.py:354 src/ui/main_window.py:872
+#: src/ui/main_window.py:903 src/ui/main_window.py:911
+#: src/ui/main_window.py:1021
+msgid "Error"
+msgstr "Erreur"
+
+#: src/ui/main_window.py:354
+msgid "Failed to create tracker: {0}"
+msgstr "Échec de la création du tracker : {0}"
+
+#: src/ui/main_window.py:405
+msgid "Path: {0}"
+msgstr "Chemin : {0}"
+
+#: src/ui/main_window.py:406 src/ui/main_window.py:558
+#: src/ui/main_window.py:624
+msgid "Size: {0}"
+msgstr "Taille : {0}"
+
+#: src/ui/main_window.py:409
+msgid "Warnings:"
+msgstr "Avertissements:"
+
+#: src/ui/main_window.py:433 src/ui/main_window.py:789
+msgid "No log files found in the tracked directories."
+msgstr "Aucun fichier journal trouvé dans les répertoires suivis."
+
+#: src/ui/main_window.py:434
+msgid "Add directories containing log files to this tracker."
+msgstr "Ajouter des répertoires contenant des fichiers journal à ce suivi."
+
+#: src/ui/main_window.py:450
+msgid "Last modified"
+msgstr "Dernière modification"
+
+#: src/ui/main_window.py:480 test/ui/test_log_viewing.py:114
+msgid "⚠️  File contains a very long line. Showing first 10KB:"
+msgstr ""
+"⚠️  Le fichier contient une ligne très longue. Affichage des 10 KB "
+"initiaux :"
+
+#: src/ui/main_window.py:488
+msgid "... (truncated, original length: {0} characters)"
+msgstr "... (tronqué, longueur originale : {0} caractères)"
+
+#: src/ui/main_window.py:514
+msgid "⚠️  Cannot display file: {0}"
+msgstr "⚠️  Impossible d’afficher le fichier : {0}"
+
+#: src/ui/main_window.py:528 src/ui/main_window.py:849
+msgid "❌ Error reading file: {0}"
+msgstr "❌ Erreur lors de la lecture du fichier: {0}"
+
+#: src/ui/main_window.py:528 src/ui/main_window.py:696
+msgid "Unknown error"
+msgstr "Erreur inconnue"
+
+#: src/ui/main_window.py:537 test/ui/test_log_viewing.py:147
+msgid "🔒 This log is encrypted. Viewing encrypted logs isn't supported yet."
+msgstr ""
+"🔒 Ce journal est chiffré. La visualisation des journaux chiffrés n'est pas "
+"encore prise en charge."
+
+#: src/ui/main_window.py:544
+msgid "Lines shown"
+msgstr "Lignes affichées"
+
+#: src/ui/main_window.py:544 src/ui/main_window.py:605
+msgid "Lines"
+msgstr "Lignes"
+
+#: src/ui/main_window.py:552
+msgid "Updated today"
+msgstr "Mis à jour aujourd'hui"
+
+#: src/ui/main_window.py:560 src/ui/main_window.py:613
+msgid "Unknown"
+msgstr "Inconnu"
+
+#: src/ui/main_window.py:568
+msgid "the decompressed contents"
+msgstr "le contenu décompressé"
+
+#: src/ui/main_window.py:572
+msgid ""
+"⏱️  Showing the last {0} of {1}. Earlier lines are not loaded - open the "
+"file in an editor to see them."
+msgstr ""
+"⏱️  Affichage des {0} derniers sur {1}. Les lignes précédentes ne sont pas "
+"chargées – ouvrez le fichier dans un éditeur pour les voir."
+
+#: src/ui/main_window.py:578
+msgid "📦 Compressed file detected"
+msgstr "📦 Fichier compressé détecté"
+
+#: src/ui/main_window.py:674
+msgid "Invalid regular expression: {0}"
+msgstr "Expression régulière invalide : {0}"
+
+#: src/ui/main_window.py:721
+msgid "regex"
+msgstr "expression régulière"
+
+#: src/ui/main_window.py:721
+msgid "plain text"
+msgstr "texte brut"
+
+#: src/ui/main_window.py:722
+msgid "limit to line start"
+msgstr "Limiter au début de ligne"
+
+#: src/ui/main_window.py:722
+msgid "full line"
+msgstr "ligne complète"
+
+#: src/ui/main_window.py:728 test/ui/test_search.py:205
+#: test/ui/test_search.py:405
+msgid "File: {0} Found {1} matches"
+msgstr "Fichier : {0} {1} correspondances trouvées"
+
+#: src/ui/main_window.py:740
+msgid "Found {0} matches in {1} file(s) (searched {2} file(s))"
+msgstr ""
+"Trouvé {0} correspondances dans {1} fichier(s) (recherché {2} fichier(s))"
+
+#: src/ui/main_window.py:746 src/ui/main_window.py:822
+msgid "Skipped {0} file(s):"
+msgstr "Ignoré(s) {0} fichier(s):"
+
+#: src/ui/main_window.py:758
+msgid "{0} ({1} match(es))"
+msgstr "{0} ({1} correspondance(s))"
+
+#: src/ui/main_window.py:816
+msgid "No matches found for '{0}' across {1} file(s) ({2}, {3})"
+msgstr ""
+"Aucune correspondance trouvée pour '{0}' dans {1} fichier(s) ({2}, {3})"
+
+#: src/ui/main_window.py:844
+msgid "⚠️  Cannot search file: {0}"
+msgstr "⚠️  Impossible de rechercher le fichier : {0}"
+
+#: src/ui/main_window.py:860
+msgid "No matches found for '{0}' ({1}, {2})"
+msgstr "Aucun résultat trouvé pour '{0}' ({1}, {2})"
+
+#: src/ui/main_window.py:872
+msgid "Failed to load tracker: {0}"
+msgstr "Échec du chargement du traqueur : {0}"
+
+#: src/ui/main_window.py:903
+msgid "Failed to update tracker: {0}"
+msgstr "Échec de la mise à jour du tracker: {0}"
+
+#: src/ui/main_window.py:911
+msgid "Failed to delete tracker: {0}"
+msgstr "Échec de la suppression du tracker : {0}"
+
+#: src/ui/main_window.py:922
+msgid "Deleted tracker \"{0}\""
+msgstr "Tracker « {0} » supprimé"
+
+#: src/ui/main_window.py:935 src/ui/main_window.py:948
+#: src/ui/main_window.py:958
+msgid "No File Selected"
+msgstr "Aucun fichier sélectionné"
+
+#: src/ui/main_window.py:935 src/ui/main_window.py:948
+msgid "Please select a log file to open in the editor."
+msgstr "Veuillez sélectionner un fichier journal à ouvrir dans l’éditeur."
+
+#: src/ui/main_window.py:942 src/ui/main_window.py:952
+msgid "Opening in editor"
+msgstr "Ouverture dans l'éditeur"
+
+#: src/ui/main_window.py:958
+msgid "Please select a log file to copy its path."
+msgstr "Veuillez sélectionner un fichier journal pour copier son chemin."
+
+#: src/ui/main_window.py:963
+msgid "Path copied to clipboard"
+msgstr "Chemin copié dans le presse‑papier"
+
+#: src/ui/main_window.py:971
+msgid "Configure Custom Editor"
+msgstr "Configurer l'éditeur personnalisé"
+
+#: src/ui/main_window.py:972
+msgid ""
+"Enter custom editor command (use {filepath} as placeholder for file path):"
+msgstr ""
+"Entrez la commande personnalisée de l'éditeur (utilisez {filepath} comme "
+"espace réservé pour le chemin du fichier) :"
+
+#: src/ui/main_window.py:973
+msgid "Examples:"
+msgstr "Exemples:"
+
+#: src/ui/main_window.py:983
+msgid "Invalid Command"
+msgstr "Commande invalide"
+
+#: src/ui/main_window.py:984
+msgid ""
+"The command must contain {filepath} as a placeholder for the file path."
+msgstr ""
+"La commande doit contenir {filepath} comme espace réservé pour le chemin du "
+"fichier."
+
+#: src/ui/main_window.py:989
+msgid "Executable Not Found"
+msgstr "Exécutable introuvable"
+
+#: src/ui/main_window.py:990
+msgid "The executable '{0}' was not found in your system PATH."
+msgstr "L'exécutable '{0}' est introuvable dans le PATH du système."
+
+#: src/ui/main_window.py:991
+msgid "Do you want to save this command anyway?"
+msgstr "Voulez‑vous enregistrer cette commande tout de même ?"
+
+#: src/ui/main_window.py:997
+msgid "Custom editor saved"
+msgstr "Éditeur personnalisé enregistré"
+
+#: src/ui/main_window.py:1001 src/ui/main_window.py:1012
+msgid "Custom editor cleared"
+msgstr "Éditeur personnalisé réinitialisé"
+
+#: src/ui/main_window.py:1006
+msgid "Are you sure you want to clear the custom editor command?"
+msgstr ""
+"Êtes‑vous sûr de vouloir effacer la commande d’éditeur personnalisée ?"
+
+#: src/ui/main_window.py:1007
+msgid "This will revert to using the system default editor."
+msgstr "Cela reviendra à utiliser l'éditeur par défaut du système."
+
+#: src/ui/tracker_dialog.py:34 src/ui/tracker_dialog.py:44
+msgid "Edit Tracker"
+msgstr "Modifier le tracker"
+
+#: src/ui/tracker_dialog.py:55
+msgid "Name:"
+msgstr "Nom:"
+
+#: src/ui/tracker_dialog.py:58
+msgid "Enter tracker name"
+msgstr "Saisissez le nom du tracker"
+
+#: src/ui/tracker_dialog.py:67
+msgid "Description:"
+msgstr "Description:"
+
+#: src/ui/tracker_dialog.py:70
+msgid "Enter tracker description"
+msgstr "Entrez la description du traceur"
+
+#: src/ui/tracker_dialog.py:79
+msgid "Log Directories:"
+msgstr "Répertoires de journaux:"
+
+#: src/ui/tracker_dialog.py:93
+msgid "Find Directories"
+msgstr "Rechercher des dossiers"
+
+#: src/ui/tracker_dialog.py:97
+msgid "Add Directory"
+msgstr "Ajouter un répertoire"
+
+#: src/ui/tracker_dialog.py:101
+msgid "Remove Directory"
+msgstr "Supprimer le répertoire"
+
+#: src/ui/tracker_dialog.py:115
+msgid "Save Changes"
+msgstr "Enregistrer les modifications"
+
+#: src/ui/tracker_dialog.py:115
+msgid "Create Tracker"
+msgstr "Créer un suivi"
+
+#: src/ui/tracker_dialog.py:127 src/ui/tracker_dialog.py:189
+msgid "Delete Tracker"
+msgstr "Supprimer le tracker"
+
+#: src/ui/tracker_dialog.py:161
+msgid "Select Log Directory"
+msgstr "Sélectionner le répertoire des journaux"
+
+#: src/ui/tracker_dialog.py:190 test/ui/test_tracker_dialog.py:263
+msgid "Delete the tracker \"{0}\"?"
+msgstr "Supprimer le traceur « {0} » ?"
+
+#: src/ui/tracker_dialog.py:191 test/ui/test_tracker_dialog.py:264
+msgid ""
+"This removes the tracker and the directories it watches from Protokoll. The "
+"log files themselves are left where they are."
+msgstr ""
+"Cela supprime le tracker ainsi que les répertoires qu’il surveille de "
+"Protokoll. Les fichiers journaux restent à leur emplacement."
+
+#: src/ui/tracker_dialog.py:216 src/ui/tracker_dialog.py:227
+msgid "Validation Error"
+msgstr "Erreur de validation"
+
+#: src/ui/tracker_dialog.py:217
+msgid "Please enter a tracker name."
+msgstr "Veuillez saisir le nom du traceur."
+
+#: src/utils/file_handler.py:117
+msgid "File does not exist"
+msgstr "Le fichier n'existe pas"
+
+#: src/utils/file_handler.py:142
+msgid "Very large file ({0}); too large to search"
+msgstr "Fichier très volumineux ({0}); trop grand pour la recherche"
+
+#: src/utils/file_handler.py:144
+msgid "Large file ({0})"
+msgstr "Fichier volumineux ({0})"
+
+#: src/utils/file_handler.py:162
+msgid "Binary detection failed"
+msgstr "Échec de la détection binaire"
+
+#: src/utils/file_handler.py:165 src/utils/file_handler.py:228
+#: src/utils/file_handler.py:275 src/utils/file_handler.py:511
+msgid "File may contain corrupted data or non-text content"
+msgstr ""
+"Le fichier peut contenir des données corrompues ou du contenu non texte"
+
+#: src/utils/file_handler.py:222 src/utils/file_handler.py:271
+msgid "Not a file"
+msgstr "Pas un fichier"
+
+#: src/utils/file_handler.py:224 src/utils/file_handler.py:273
+msgid "Not readable"
+msgstr "Non lisible"
+
+#: src/utils/file_handler.py:226
+msgid "Size exceeds limit ({0})"
+msgstr "La taille dépasse la limite ({0})"
+
+#: src/utils/file_handler.py:248 src/utils/file_handler.py:312
+msgid "Encoding error: {0}"
+msgstr "Erreur d'encodage : {0}"
+
+#: src/utils/file_handler.py:367 src/utils/file_handler.py:396
+msgid "Empty zip archive"
+msgstr "Archive zip vide"
+
+#: src/utils/file_handler.py:374 src/utils/file_handler.py:410
+msgid "No log files in zip"
+msgstr "Aucun fichier journal dans le ZIP"
+
+#: src/utils/file_handler.py:376 src/utils/file_handler.py:412
+msgid "Unsupported compression: {0}"
+msgstr "Compression non prise en charge: {0}"
+
+#: src/utils/file_handler.py:505
+msgid "Path is not a file"
+msgstr "Le chemin n'est pas un fichier"
+
+#: src/utils/file_handler.py:508
+msgid "File is not readable"
+msgstr "Le fichier n'est pas lisible"
+
+#: src/utils/file_handler.py:513
+msgid "File is valid for viewing"
+msgstr "Le fichier est valide pour la visualisation"
+
+#: src/utils/translations.py:71
+msgid "Ctrl"
+msgstr "Ctrl"
+
+#: src/utils/translations.py:72
+msgid "Shift"
+msgstr "Maj"
+
+#: src/utils/translations.py:73
+msgid "Alt"
+msgstr "Alt"
+
+#: src/utils/utils.py:725
+msgid "Executable not found: {0}"
+msgstr "Exécutable introuvable : {0}"
+
+#: src/utils/utils.py:745
+msgid "Failed to open file with editor: {0}"
+msgstr "Impossible d'ouvrir le fichier avec l'éditeur: {0}"
+
+#: src/utils/utils.py:749
+msgid "Editor not found: {0}"
+msgstr "Éditeur introuvable : {0}"
+
+#: src/utils/utils.py:753
+msgid "Unexpected error opening file: {0}"
+msgstr "Erreur inattendue lors de l'ouverture du fichier : {0}"

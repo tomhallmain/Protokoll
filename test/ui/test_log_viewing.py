@@ -17,13 +17,21 @@ _TAIL_NOTICE = ("⏱️  Showing the last {0} of {1}. Earlier lines are not load
                 "open the file in an editor to see them.")
 
 
-def _rendered(text):
-    """Collapse runs of spaces, the way the viewer's HTML rendering does.
+#: Space characters the rich-text rendering turns into an ordinary space. A
+#: translation is free to use one -- German writes "10 KB" with a narrow
+#: no-break space -- and it does not survive to toPlainText().
+_SPACES = "\u00a0\u2009\u202f"
 
-    Messages reach the log viewer as HTML, where consecutive spaces collapse to
-    one, so a message written with two spaces after its emoji does not appear
-    on screen character for character.
+
+def _rendered(text):
+    """Normalise text the way the viewer's HTML rendering does.
+
+    Messages reach the log viewer as HTML, where the spaces above become
+    ordinary ones and runs of them collapse to a single space, so a message
+    does not appear on screen character for character.
     """
+    for space in _SPACES:
+        text = text.replace(space, " ")
     return re.sub(r" {2,}", " ", text)
 
 
@@ -130,7 +138,7 @@ def test_display_log_file_loads_large_multiline_file_in_chunks(qtbot, window, tm
     _assert_in(line, result)
     assert len(result) > 1_000_000  # loaded in full, unlike the single-long-line truncation path
     _assert_in("app.log", result)  # header line intact
-    _assert_in("Size:", result)  # size/line-count header line intact too
+    _assert_in(_msg_start("Size: {0}"), result)  # size/line-count header line intact too
 
 
 def test_display_log_file_handles_encrypted_log_without_crashing(qtbot, window, tmp_path):

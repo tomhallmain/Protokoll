@@ -1,0 +1,562 @@
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: 1.0\n"
+"POT-Creation-Date: 2026-09-19 21:31-0400\n"
+"PO-Revision-Date: 2026-09-19 21:31-0400\n"
+"Last-Translator: Translator Name <translator@example.com>\n"
+"Language-Team: ja Team <<EMAIL>>\n"
+"Language: ja\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: src/internal/log_directory_finder.py:110 src/internal/tracker.py:40
+#: src/internal/tracker.py:66 src/ui/tracker_dialog.py:228
+msgid "Directory does not exist: {0}"
+msgstr "ディレクトリが存在しません: {0}"
+
+#: src/internal/log_directory_finder.py:112 src/internal/tracker.py:43
+#: src/internal/tracker.py:68
+msgid "Path is not a directory: {0}"
+msgstr "パスはディレクトリではありません: {0}"
+
+#: src/internal/log_directory_finder.py:119
+msgid "Directory already in custom directories: {0}"
+msgstr "ディレクトリは既にカスタムディレクトリにあります: {0}"
+
+#: src/internal/log_directory_finder.py:127
+msgid "Added custom directory: {0}"
+msgstr "カスタムディレクトリを追加しました: {0}"
+
+#: src/internal/log_directory_finder.py:130
+msgid "Error adding custom directory: {0}"
+msgstr "カスタムディレクトリの追加エラー: {0}"
+
+#: src/internal/log_directory_finder.py:149
+msgid "Directory not found in custom directories: {0}"
+msgstr "カスタムディレクトリ内にディレクトリが見つかりません: {0}"
+
+#: src/internal/log_directory_finder.py:157
+msgid "Removed custom directory: {0}"
+msgstr "カスタムディレクトリが削除されました: {0}"
+
+#: src/internal/log_directory_finder.py:160
+msgid "Error removing custom directory: {0}"
+msgstr "カスタムディレクトリの削除エラー: {0}"
+
+#: src/ui/find_log_dirs_dialog.py:56
+msgid "Find Log Directories for {0}"
+msgstr "{0}のログディレクトリを検索"
+
+#: src/ui/find_log_dirs_dialog.py:66
+msgid "Searching for log directories..."
+msgstr "ログディレクトリを検索中..."
+
+#: src/ui/find_log_dirs_dialog.py:78
+msgid "Exact Matches:"
+msgstr "完全一致："
+
+#: src/ui/find_log_dirs_dialog.py:88
+msgid "Potential Matches:"
+msgstr "潜在的な一致:"
+
+#: src/ui/find_log_dirs_dialog.py:100
+msgid "Add Selected"
+msgstr "選択項目を追加"
+
+#: src/ui/find_log_dirs_dialog.py:105 src/ui/tracker_dialog.py:120
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: src/ui/find_log_dirs_dialog.py:134 src/ui/find_log_dirs_dialog.py:139
+msgid "Search Error"
+msgstr "検索エラー"
+
+#: src/ui/find_log_dirs_dialog.py:158
+msgid "Found {0} exact matches and {1} potential matches"
+msgstr "正確な一致が {0} 件、潜在的な一致が {1} 件見つかりました"
+
+#: src/ui/main_window.py:69
+msgid ""
+"Your trackers could not be read, and no changes will be saved until that is "
+"resolved."
+msgstr "トラッカーを読み取れませんでした。問題が解決されるまで変更は保存されません。"
+
+#: src/ui/main_window.py:93 src/ui/tracker_dialog.py:34
+#: src/ui/tracker_dialog.py:44
+msgid "Create New Tracker"
+msgstr "新しいトラッカーを作成"
+
+#: src/ui/main_window.py:99
+msgid "Trackers"
+msgstr "トラッカー"
+
+#: src/ui/main_window.py:116
+msgid "Log Files"
+msgstr "ログファイル"
+
+#: src/ui/main_window.py:135
+msgid "Search in logs..."
+msgstr "ログを検索..."
+
+#: src/ui/main_window.py:137
+msgid "Search"
+msgstr "検索"
+
+#: src/ui/main_window.py:148
+msgid "Show line numbers"
+msgstr "行番号を表示"
+
+#: src/ui/main_window.py:156
+msgid "Use regular expression"
+msgstr "正規表現を使用する"
+
+#: src/ui/main_window.py:164
+msgid ""
+"Match only at start of log line (after level: INFO, ERROR, WARNING, DEBUG, "
+"TRACE)"
+msgstr "ログ行の先頭でのみ一致（レベル: INFO、ERROR、WARNING、DEBUG、TRACE の後）"
+
+#: src/ui/main_window.py:172
+msgid "Search all log files in the tracker (not just the selected file)"
+msgstr "トラッカーのすべてのログファイルを検索（選択したファイルだけでなく）"
+
+#: src/ui/main_window.py:181
+msgid ""
+"Group multi-line logger calls (tracebacks, formatted messages) into single "
+"entries"
+msgstr "複数行のロガー呼び出し（トレースバック、フォーマット済みメッセージ）を単一エントリにまとめる"
+
+#: src/ui/main_window.py:188
+msgid "B:"
+msgstr "B:"
+
+#: src/ui/main_window.py:189
+msgid "Entries of context to show before each match"
+msgstr "各一致の前に表示するコンテキストエントリ"
+
+#: src/ui/main_window.py:196
+msgid "A:"
+msgstr "A:"
+
+#: src/ui/main_window.py:197
+msgid "Entries of context to show after each match"
+msgstr "各一致後に表示するコンテキストエントリ"
+
+#: src/ui/main_window.py:201
+msgid "Clear"
+msgstr "クリア"
+
+#: src/ui/main_window.py:206
+msgid "Refresh"
+msgstr "更新"
+
+#: src/ui/main_window.py:223
+msgid "Open in Editor"
+msgstr "エディタで開く"
+
+#: src/ui/main_window.py:229
+msgid "Use Default Editor"
+msgstr "デフォルトエディタを使用"
+
+#: src/ui/main_window.py:232
+msgid "Copy path to clipboard"
+msgstr "パスをクリップボードにコピー"
+
+#: src/ui/main_window.py:235
+msgid "Configure Custom Editor..."
+msgstr "カスタムエディターを構成..."
+
+#: src/ui/main_window.py:242
+msgid "Current: {0}"
+msgstr "現在: {0}"
+
+#: src/ui/main_window.py:244 src/ui/main_window.py:1005
+msgid "Clear Custom Editor"
+msgstr "カスタムエディタをクリア"
+
+#: src/ui/main_window.py:354 src/ui/main_window.py:872
+#: src/ui/main_window.py:903 src/ui/main_window.py:911
+#: src/ui/main_window.py:1021
+msgid "Error"
+msgstr "エラー"
+
+#: src/ui/main_window.py:354
+msgid "Failed to create tracker: {0}"
+msgstr "トラッカーの作成に失敗しました: {0}"
+
+#: src/ui/main_window.py:405
+msgid "Path: {0}"
+msgstr "パス: {0}"
+
+#: src/ui/main_window.py:406 src/ui/main_window.py:558
+#: src/ui/main_window.py:624
+msgid "Size: {0}"
+msgstr "サイズ: {0}"
+
+#: src/ui/main_window.py:409
+msgid "Warnings:"
+msgstr "警告:"
+
+#: src/ui/main_window.py:433 src/ui/main_window.py:789
+msgid "No log files found in the tracked directories."
+msgstr "追跡されたディレクトリにログファイルが見つかりませんでした。"
+
+#: src/ui/main_window.py:434
+msgid "Add directories containing log files to this tracker."
+msgstr "ログファイルを含むディレクトリをこのトラッカーに追加する。"
+
+#: src/ui/main_window.py:450
+msgid "Last modified"
+msgstr "最終更新"
+
+#: src/ui/main_window.py:480 test/ui/test_log_viewing.py:114
+msgid "⚠️  File contains a very long line. Showing first 10KB:"
+msgstr "⚠️  ファイルに非常に長い行が含まれています。最初の10KBを表示しています:"
+
+#: src/ui/main_window.py:488
+msgid "... (truncated, original length: {0} characters)"
+msgstr "...（省略、元の長さ: {0} 文字）"
+
+#: src/ui/main_window.py:514
+msgid "⚠️  Cannot display file: {0}"
+msgstr "⚠️  ファイルを表示できません: {0}"
+
+#: src/ui/main_window.py:528 src/ui/main_window.py:849
+msgid "❌ Error reading file: {0}"
+msgstr "❌ ファイル読み取りエラー: {0}"
+
+#: src/ui/main_window.py:528 src/ui/main_window.py:696
+msgid "Unknown error"
+msgstr "不明なエラー"
+
+#: src/ui/main_window.py:537 test/ui/test_log_viewing.py:147
+msgid "🔒 This log is encrypted. Viewing encrypted logs isn't supported yet."
+msgstr "🔒 このログは暗号化されています。暗号化されたログの表示はまだサポートされていません。"
+
+#: src/ui/main_window.py:544
+msgid "Lines shown"
+msgstr "表示されている行"
+
+#: src/ui/main_window.py:544 src/ui/main_window.py:605
+msgid "Lines"
+msgstr "行"
+
+#: src/ui/main_window.py:552
+msgid "Updated today"
+msgstr "本日更新"
+
+#: src/ui/main_window.py:560 src/ui/main_window.py:613
+msgid "Unknown"
+msgstr "不明"
+
+#: src/ui/main_window.py:568
+msgid "the decompressed contents"
+msgstr "解凍された内容"
+
+#: src/ui/main_window.py:572
+msgid ""
+"⏱️  Showing the last {0} of {1}. Earlier lines are not loaded - open the "
+"file in an editor to see them."
+msgstr "⏱️  最後の {0}/{1} を表示しています。以前の行は読み込まれていません – エディタでファイルを開いて確認してください。"
+
+#: src/ui/main_window.py:578
+msgid "📦 Compressed file detected"
+msgstr "📦 圧縮ファイルが検出されました"
+
+#: src/ui/main_window.py:674
+msgid "Invalid regular expression: {0}"
+msgstr "無効な正規表現: {0}"
+
+#: src/ui/main_window.py:721
+msgid "regex"
+msgstr "正規表現"
+
+#: src/ui/main_window.py:721
+msgid "plain text"
+msgstr "プレーンテキスト"
+
+#: src/ui/main_window.py:722
+msgid "limit to line start"
+msgstr "行頭に限定"
+
+#: src/ui/main_window.py:722
+msgid "full line"
+msgstr "全行"
+
+#: src/ui/main_window.py:728 test/ui/test_search.py:205
+#: test/ui/test_search.py:405
+msgid "File: {0} Found {1} matches"
+msgstr "ファイル: {0} {1} 件の一致が見つかりました"
+
+#: src/ui/main_window.py:740
+msgid "Found {0} matches in {1} file(s) (searched {2} file(s))"
+msgstr "見つかった {0} 件の一致が {1} ファイルで（検索した {2} ファイル）"
+
+#: src/ui/main_window.py:746 src/ui/main_window.py:822
+msgid "Skipped {0} file(s):"
+msgstr "スキップされた {0} ファイル:"
+
+#: src/ui/main_window.py:758
+msgid "{0} ({1} match(es))"
+msgstr "{0}（{1} 件の一致）"
+
+#: src/ui/main_window.py:816
+msgid "No matches found for '{0}' across {1} file(s) ({2}, {3})"
+msgstr "「{0}」について、{1} ファイルで一致が見つかりませんでした（{2}、{3}）"
+
+#: src/ui/main_window.py:844
+msgid "⚠️  Cannot search file: {0}"
+msgstr "⚠️  ファイルを検索できません: {0}"
+
+#: src/ui/main_window.py:860
+msgid "No matches found for '{0}' ({1}, {2})"
+msgstr "「{0}」の一致が見つかりません ({1}, {2})"
+
+#: src/ui/main_window.py:872
+msgid "Failed to load tracker: {0}"
+msgstr "トラッカーの読み込みに失敗しました: {0}"
+
+#: src/ui/main_window.py:903
+msgid "Failed to update tracker: {0}"
+msgstr "トラッカーの更新に失敗しました: {0}"
+
+#: src/ui/main_window.py:911
+msgid "Failed to delete tracker: {0}"
+msgstr "トラッカーの削除に失敗しました: {0}"
+
+#: src/ui/main_window.py:922
+msgid "Deleted tracker \"{0}\""
+msgstr "トラッカー「{0}」を削除しました"
+
+#: src/ui/main_window.py:935 src/ui/main_window.py:948
+#: src/ui/main_window.py:958
+msgid "No File Selected"
+msgstr "ファイルが選択されていません"
+
+#: src/ui/main_window.py:935 src/ui/main_window.py:948
+msgid "Please select a log file to open in the editor."
+msgstr "エディタで開くログファイルを選択してください。"
+
+#: src/ui/main_window.py:942 src/ui/main_window.py:952
+msgid "Opening in editor"
+msgstr "エディタで開く"
+
+#: src/ui/main_window.py:958
+msgid "Please select a log file to copy its path."
+msgstr "パスをコピーするために、ログファイルを選択してください。"
+
+#: src/ui/main_window.py:963
+msgid "Path copied to clipboard"
+msgstr "パスがクリップボードにコピーされました"
+
+#: src/ui/main_window.py:971
+msgid "Configure Custom Editor"
+msgstr "カスタムエディタを構成する"
+
+#: src/ui/main_window.py:972
+msgid ""
+"Enter custom editor command (use {filepath} as placeholder for file path):"
+msgstr "カスタムエディタコマンドを入力してください（{filepath} をファイルパスのプレースホルダーとして使用）:"
+
+#: src/ui/main_window.py:973
+msgid "Examples:"
+msgstr "例："
+
+#: src/ui/main_window.py:983
+msgid "Invalid Command"
+msgstr "無効なコマンド"
+
+#: src/ui/main_window.py:984
+msgid ""
+"The command must contain {filepath} as a placeholder for the file path."
+msgstr "コマンドには、ファイルパスのプレースホルダーとして {filepath} を含める必要があります。"
+
+#: src/ui/main_window.py:989
+msgid "Executable Not Found"
+msgstr "実行ファイルが見つかりません"
+
+#: src/ui/main_window.py:990
+msgid "The executable '{0}' was not found in your system PATH."
+msgstr "実行可能ファイル「{0}」がシステムのPATHに見つかりませんでした。"
+
+#: src/ui/main_window.py:991
+msgid "Do you want to save this command anyway?"
+msgstr "このコマンドをそれでも保存しますか？"
+
+#: src/ui/main_window.py:997
+msgid "Custom editor saved"
+msgstr "カスタムエディタが保存されました"
+
+#: src/ui/main_window.py:1001 src/ui/main_window.py:1012
+msgid "Custom editor cleared"
+msgstr "カスタムエディタがクリアされました"
+
+#: src/ui/main_window.py:1006
+msgid "Are you sure you want to clear the custom editor command?"
+msgstr "カスタムエディタコマンドをクリアしてもよろしいですか？"
+
+#: src/ui/main_window.py:1007
+msgid "This will revert to using the system default editor."
+msgstr "これにより、システムのデフォルトエディタが使用されます。"
+
+#: src/ui/tracker_dialog.py:34 src/ui/tracker_dialog.py:44
+msgid "Edit Tracker"
+msgstr "トラッカーを編集"
+
+#: src/ui/tracker_dialog.py:55
+msgid "Name:"
+msgstr "名前:"
+
+#: src/ui/tracker_dialog.py:58
+msgid "Enter tracker name"
+msgstr "トラッカー名を入力"
+
+#: src/ui/tracker_dialog.py:67
+msgid "Description:"
+msgstr "説明:"
+
+#: src/ui/tracker_dialog.py:70
+msgid "Enter tracker description"
+msgstr "トラッカーの説明を入力"
+
+#: src/ui/tracker_dialog.py:79
+msgid "Log Directories:"
+msgstr "ログ ディレクトリ："
+
+#: src/ui/tracker_dialog.py:93
+msgid "Find Directories"
+msgstr "ディレクトリを検索"
+
+#: src/ui/tracker_dialog.py:97
+msgid "Add Directory"
+msgstr "ディレクトリを追加"
+
+#: src/ui/tracker_dialog.py:101
+msgid "Remove Directory"
+msgstr "ディレクトリを削除"
+
+#: src/ui/tracker_dialog.py:115
+msgid "Save Changes"
+msgstr "変更を保存"
+
+#: src/ui/tracker_dialog.py:115
+msgid "Create Tracker"
+msgstr "トラッカーを作成"
+
+#: src/ui/tracker_dialog.py:127 src/ui/tracker_dialog.py:189
+msgid "Delete Tracker"
+msgstr "トラッカーを削除"
+
+#: src/ui/tracker_dialog.py:161
+msgid "Select Log Directory"
+msgstr "ログディレクトリを選択"
+
+#: src/ui/tracker_dialog.py:190 test/ui/test_tracker_dialog.py:263
+msgid "Delete the tracker \"{0}\"?"
+msgstr "トラッカー「{0}」を削除しますか？"
+
+#: src/ui/tracker_dialog.py:191 test/ui/test_tracker_dialog.py:264
+msgid ""
+"This removes the tracker and the directories it watches from Protokoll. The "
+"log files themselves are left where they are."
+msgstr "これにより、トラッカーとその監視対象ディレクトリがProtokollから削除されます。ログファイル自体はそのまま残ります。"
+
+#: src/ui/tracker_dialog.py:216 src/ui/tracker_dialog.py:227
+msgid "Validation Error"
+msgstr "検証エラー"
+
+#: src/ui/tracker_dialog.py:217
+msgid "Please enter a tracker name."
+msgstr "トラッカー名を入力してください。"
+
+#: src/utils/file_handler.py:117
+msgid "File does not exist"
+msgstr "ファイルが存在しません"
+
+#: src/utils/file_handler.py:142
+msgid "Very large file ({0}); too large to search"
+msgstr "非常に大きなファイル ({0})；検索できないほど大きい"
+
+#: src/utils/file_handler.py:144
+msgid "Large file ({0})"
+msgstr "大きなファイル ({0})"
+
+#: src/utils/file_handler.py:162
+msgid "Binary detection failed"
+msgstr "バイナリ検出に失敗しました"
+
+#: src/utils/file_handler.py:165 src/utils/file_handler.py:228
+#: src/utils/file_handler.py:275 src/utils/file_handler.py:511
+msgid "File may contain corrupted data or non-text content"
+msgstr "ファイルに破損したデータまたは非テキストコンテンツが含まれている可能性があります"
+
+#: src/utils/file_handler.py:222 src/utils/file_handler.py:271
+msgid "Not a file"
+msgstr "ファイルではありません"
+
+#: src/utils/file_handler.py:224 src/utils/file_handler.py:273
+msgid "Not readable"
+msgstr "読めません"
+
+#: src/utils/file_handler.py:226
+msgid "Size exceeds limit ({0})"
+msgstr "サイズが制限を超えています ({0})"
+
+#: src/utils/file_handler.py:248 src/utils/file_handler.py:312
+msgid "Encoding error: {0}"
+msgstr "エンコードエラー: {0}"
+
+#: src/utils/file_handler.py:367 src/utils/file_handler.py:396
+msgid "Empty zip archive"
+msgstr "空のZIPアーカイブ"
+
+#: src/utils/file_handler.py:374 src/utils/file_handler.py:410
+msgid "No log files in zip"
+msgstr "ZIP内にログファイルがありません"
+
+#: src/utils/file_handler.py:376 src/utils/file_handler.py:412
+msgid "Unsupported compression: {0}"
+msgstr "サポートされていない圧縮形式: {0}"
+
+#: src/utils/file_handler.py:505
+msgid "Path is not a file"
+msgstr "パスはファイルではありません"
+
+#: src/utils/file_handler.py:508
+msgid "File is not readable"
+msgstr "ファイルが読み取りできません"
+
+#: src/utils/file_handler.py:513
+msgid "File is valid for viewing"
+msgstr "ファイルは閲覧可能です"
+
+#: src/utils/translations.py:71
+msgid "Ctrl"
+msgstr "Ctrl"
+
+#: src/utils/translations.py:72
+msgid "Shift"
+msgstr "シフト"
+
+#: src/utils/translations.py:73
+msgid "Alt"
+msgstr "Alt"
+
+#: src/utils/utils.py:725
+msgid "Executable not found: {0}"
+msgstr "実行ファイルが見つかりません: {0}"
+
+#: src/utils/utils.py:745
+msgid "Failed to open file with editor: {0}"
+msgstr "エディタでファイルを開けませんでした: {0}"
+
+#: src/utils/utils.py:749
+msgid "Editor not found: {0}"
+msgstr "エディタが見つかりません: {0}"
+
+#: src/utils/utils.py:753
+msgid "Unexpected error opening file: {0}"
+msgstr "ファイルを開く際の予期しないエラー: {0}"
