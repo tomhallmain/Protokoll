@@ -47,9 +47,23 @@ class FileHandler:
     # this extension skip binary detection instead of being rejected as corrupted.
     ENCRYPTED_LOG_EXTENSION = '.enc'
 
-    # File size limits (100MB max, 10MB warning)
+    # File size limits for whole-file reads (100MB max, 10MB warning). Tail reads
+    # are bounded by their own budget and ignore the maximum.
     MAX_FILE_SIZE = 100 * 1024 * 1024
     WARN_FILE_SIZE = 10 * 1024 * 1024
+
+    # How much of a file's end read_tail_safe() loads by default. Reading the end
+    # of a file costs the same whatever the file's size, which is what keeps
+    # opening a multi-gigabyte log as cheap as opening a small one.
+    DEFAULT_TAIL_BYTES = 2 * 1024 * 1024
+
+    # Read granularity when decompressing to reach a tail.
+    COMPRESSED_READ_CHUNK = 1024 * 1024
+
+    # Encodings in which b'\n' means a line break and nothing else, so a tail can
+    # be cut at one. UTF-16 gives no such guarantee -- that byte occurs inside
+    # ordinary characters -- so files detected as UTF-16 are read whole instead.
+    TAIL_SAFE_ENCODING_PREFIXES = ('utf-8', 'ascii', 'latin', 'iso-8859', 'cp', 'windows-')
     
     # Sample size for detection (4KB optimized for chunk size)
     DETECTION_SAMPLE_SIZE = 4096
@@ -119,9 +133,11 @@ class FileHandler:
                 "warnings": []
             }
 
-            # Size warnings
+            # Size warnings. Over the maximum a file can still be viewed, since
+            # the viewer reads its tail; what it cannot be is read whole, which
+            # is what searching it needs.
             if file_size > self.MAX_FILE_SIZE:
-                info["warnings"].append(f"File too large ({info['size_human']})")
+                info["warnings"].append(f"Very large file ({info['size_human']}); too large to search")
             elif file_size > self.WARN_FILE_SIZE:
                 info["warnings"].append(f"Large file ({info['size_human']})")
 
@@ -220,20 +236,9 @@ class FileHandler:
                 content = self._read_compressed_file(file_path)
             # Handle text files
             else:
-                sample = file_info.get("sample", b"")
-                encoding = self._detect_encoding(sample)
-                
-                # Read file with null byte handling
+                encoding = self._detect_encoding(file_info.get("sample", b""))
                 with open(file_path, 'rb') as f:
-                    raw_content = f.read()
-                    
-                    # Handle files with null bytes
-                    if b'\x00' in raw_content:
-                        # Replace null bytes with Unicode replacement character
-                        raw_content = raw_content.replace(b'\x00', b'\xef\xbf\xbd')
-                        content = raw_content.decode(encoding, errors='replace')
-                    else:
-                        content = raw_content.decode(encoding, errors='replace')
+                    content = self._decode_bytes(f.read(), encoding)
             
             return True, content, file_info
             
@@ -242,6 +247,133 @@ class FileHandler:
         except Exception as e:
             logger.error(f"Read error: {str(e)}")
             return False, "", {"error": str(e)}
+
+    def read_tail_safe(self, file_path: str, max_bytes: Optional[int] = None) -> Tuple[bool, Union[str, bytes], Dict[str, Any]]:
+        """
+        Read the end of a file, up to *max_bytes*, starting at a line boundary.
+
+        Returns (success, content, info) as read_file_safe does, with
+        info["is_tail"] saying whether the start of the file was left out, and
+        info["shown_size_human"] how much came back. There is no size ceiling
+        here: the read is bounded by max_bytes however large the file is.
+
+        A file that already fits comes back whole, so a caller can use this for
+        every file and let the size decide.
+        """
+        max_bytes = max_bytes or self.DEFAULT_TAIL_BYTES
+        file_info = self.get_file_info(file_path)
+
+        if "error" in file_info:
+            return False, "", file_info
+        if not file_info["is_file"]:
+            return False, "", {"error": "Not a file"}
+        if not file_info["readable"]:
+            return False, "", {"error": "Not readable"}
+        if file_info.get("is_binary", False):
+            return False, "", {"error": "File may contain corrupted data or non-text content", "warnings": file_info["warnings"]}
+
+        # An encrypted log is a stream of length-prefixed records, which cannot be
+        # read from an arbitrary offset, so it takes the whole-file path and its
+        # size limit.
+        if file_info.get("is_encrypted", False):
+            return self.read_file_safe(file_path)
+
+        try:
+            if file_info["is_compressed"]:
+                # Compressed formats have no seekable end, so the stream is
+                # decompressed in full; only the tail is held.
+                raw_content, is_tail = self._read_compressed_tail(file_path, max_bytes)
+                encoding = 'utf-8'
+            else:
+                encoding = self._detect_encoding(file_info.get("sample", b""))
+                is_tail = file_info["size"] > max_bytes
+                if is_tail and not self._is_tail_safe_encoding(encoding):
+                    logger.info(
+                        f"{file_path} is {encoding}, which has no unambiguous line "
+                        f"boundary in bytes; reading it whole")
+                    return self.read_file_safe(file_path)
+                with open(file_path, 'rb') as f:
+                    if is_tail:
+                        f.seek(-max_bytes, os.SEEK_END)
+                    raw_content = f.read()
+
+            if is_tail:
+                raw_content = self._drop_partial_first_line(raw_content)
+
+            info = dict(file_info)
+            info["is_tail"] = is_tail
+            info["shown_bytes"] = len(raw_content)
+            info["shown_size_human"] = self._format_size(len(raw_content))
+            return True, self._decode_bytes(raw_content, encoding), info
+
+        except UnicodeDecodeError as e:
+            return False, "", {"error": f"Encoding error: {str(e)}"}
+        except Exception as e:
+            logger.error(f"Tail read error: {str(e)}")
+            return False, "", {"error": str(e)}
+
+    @classmethod
+    def _is_tail_safe_encoding(cls, encoding: str) -> bool:
+        return str(encoding).lower().startswith(cls.TAIL_SAFE_ENCODING_PREFIXES)
+
+    @staticmethod
+    def _drop_partial_first_line(raw_content: bytes) -> bytes:
+        """Cut everything before the first line break.
+
+        A slice taken from the middle of a file starts mid-line. Content with
+        nothing after its first line break is returned untouched -- a single
+        long line, or a budget smaller than one line -- since cutting it would
+        leave nothing to show.
+        """
+        newline = raw_content.find(b'\n')
+        if newline == -1 or newline + 1 >= len(raw_content):
+            return raw_content
+        return raw_content[newline + 1:]
+
+    def _decode_bytes(self, raw_content: bytes, encoding: str) -> str:
+        """Decode file bytes to text, keeping null bytes visible as replacement characters."""
+        if b'\x00' in raw_content:
+            raw_content = raw_content.replace(b'\x00', b'\xef\xbf\xbd')
+        return raw_content.decode(encoding, errors='replace')
+
+    def _read_compressed_tail(self, file_path: str, max_bytes: int) -> Tuple[bytes, bool]:
+        """Decompress a file, keeping only its last *max_bytes*."""
+        tail = bytearray()
+        is_tail = False
+
+        def consume(stream):
+            nonlocal is_tail
+            while True:
+                chunk = stream.read(self.COMPRESSED_READ_CHUNK)
+                if not chunk:
+                    return
+                tail.extend(chunk)
+                if len(tail) > max_bytes:
+                    del tail[:len(tail) - max_bytes]
+                    is_tail = True
+
+        ext = Path(file_path).suffix.lower()
+        if ext == '.gz':
+            with gzip.open(file_path, 'rb') as f:
+                consume(f)
+        elif ext == '.bz2':
+            with bz2.open(file_path, 'rb') as f:
+                consume(f)
+        elif ext == '.zip':
+            with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                if not zip_ref.namelist():
+                    raise ValueError("Empty zip archive")
+                for name in zip_ref.namelist():
+                    if self.is_log_file(name) and not name.endswith('/'):
+                        with zip_ref.open(name) as f:
+                            consume(f)
+                        break
+                else:
+                    raise ValueError("No log files in zip")
+        else:
+            raise ValueError(f"Unsupported compression: {ext}")
+
+        return bytes(tail), is_tail
 
     def _read_compressed_file(self, file_path: str) -> str:
         """Read compressed files with null byte handling."""
@@ -351,6 +483,10 @@ class FileHandler:
     def validate_file_for_viewing(self, file_path: str) -> Tuple[bool, str, Dict[str, Any]]:
         """
         Validate if a file is suitable for viewing in the log viewer.
+
+        Size is not a bar: the viewer reads the tail, and that costs the same
+        whatever the file's size. get_file_info() still warns about a large file,
+        and whole-file readers keep their own MAX_FILE_SIZE limit.
         
         Args:
             file_path: Path to the file
@@ -371,8 +507,5 @@ class FileHandler:
         
         if file_info.get("is_binary", False):
             return False, "File may contain corrupted data or non-text content", file_info
-        
-        if file_info["size"] > self.MAX_FILE_SIZE:
-            return False, f"File too large ({file_info['size_human']})", file_info
         
         return True, "File is valid for viewing", file_info 

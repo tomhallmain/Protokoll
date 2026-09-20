@@ -119,3 +119,36 @@ def test_display_log_file_handles_encrypted_log_without_crashing(qtbot, window, 
 
     result = window.log_viewer.toPlainText()
     _assert_in("encrypted", result.lower())
+
+
+def test_display_log_file_shows_only_the_tail_of_a_large_file(qtbot, window, tmp_path):
+    """The whole point of the tail read: what is on screen is the end of the
+    file, and the cost of getting there does not grow with the file."""
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log_file = log_dir / "app.log"
+    log_file.write_bytes(b"".join(b"line %05d\n" % i for i in range(2000)))
+    window.config_manager.set("log_viewer.max_load_bytes", 2048)
+
+    window.display_log_file(str(log_file))
+
+    result = window.log_viewer.toPlainText()
+    _assert_in("line 01999", result)
+    _assert_not_in("line 00000", result)
+    _assert_in("Showing the last", result)
+    _assert_in("Lines shown:", result)
+
+
+def test_display_log_file_does_not_announce_a_tail_for_a_small_file(qtbot, window, tmp_path):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log_file = log_dir / "app.log"
+    log_file.write_bytes(b"line one\nline two\n")
+    window.config_manager.set("log_viewer.max_load_bytes", 2048)
+
+    window.display_log_file(str(log_file))
+
+    result = window.log_viewer.toPlainText()
+    _assert_not_in("Showing the last", result)
+    _assert_in("Lines: 3", result)
+

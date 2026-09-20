@@ -511,6 +511,31 @@ class MainWindow(QMainWindow):
             self.log_viewer.append("\n")
             return
         
+        # Read before the header is written: how much of the file is actually
+        # being shown belongs in it.
+        max_load_bytes = self.config_manager.get(
+            "log_viewer.max_load_bytes", FileHandler.DEFAULT_TAIL_BYTES)
+        success, content, read_info = self.file_handler.read_tail_safe(file_path, max_load_bytes)
+
+        if not success:
+            self.append_styled_content(f"❌ Error reading file: {read_info.get('error', 'Unknown error')}", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
+            self.log_viewer.append("\n")
+            return
+
+        if file_info.get("is_encrypted", False):
+            # read_tail_safe hands back raw ciphertext (bytes) for .enc files; there's no
+            # service_name/app_identifier wiring here yet to decrypt it, so show that plainly
+            # instead of feeding bytes into the str-only content handling below.
+            self.append_styled_content(
+                "🔒 This log is encrypted. Viewing encrypted logs isn't supported yet.",
+                color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
+            )
+            self.log_viewer.append("\n")
+            return
+
+        is_tail = read_info.get("is_tail", False)
+        lines_label = "Lines shown" if is_tail else "Lines"
+
         # Show file information header
         last_modified = file_info.get("last_modified")
         updated_today_note = ""
@@ -521,7 +546,19 @@ class MainWindow(QMainWindow):
             except (OSError, ValueError):
                 pass
         self.append_styled_content(f"=== {os.path.basename(file_path)} ===", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
-        self.append_styled_content(f"Size: {file_info['size_human']} | Lines: {file_info.get('total_lines', 'Unknown')}{updated_today_note}", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+        self.append_styled_content(f"Size: {file_info['size_human']} | {lines_label}: {file_info.get('total_lines', 'Unknown')}{updated_today_note}", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+
+        if is_tail:
+            # A compressed file's size on disk is not what was decompressed, so
+            # only an uncompressed file can say what fraction is being shown.
+            of_what = (
+                "the decompressed contents" if file_info.get("is_compressed", False)
+                else file_info["size_human"]
+            )
+            self.append_styled_content(
+                f"⏱️  Showing the last {read_info['shown_size_human']} of {of_what}. "
+                f"Earlier lines are not loaded - open the file in an editor to see them.",
+                color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
         
         if file_info.get("is_compressed", False):
             self.append_styled_content("📦 Compressed file detected", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
@@ -531,25 +568,6 @@ class MainWindow(QMainWindow):
                 self.append_styled_content(f"⚠️  {warning}", color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
         
         self.log_viewer.append("\n")
-        
-        # Read file content safely
-        success, content, read_info = self.file_handler.read_file_safe(file_path)
-        
-        if not success:
-            self.append_styled_content(f"❌ Error reading file: {read_info.get('error', 'Unknown error')}", color=ThemeManager.DARK_THEME["log_viewer"]["error"])
-            self.log_viewer.append("\n")
-            return
-
-        if file_info.get("is_encrypted", False):
-            # read_file_safe hands back raw ciphertext (bytes) for .enc files; there's no
-            # service_name/app_identifier wiring here yet to decrypt it, so show that plainly
-            # instead of feeding bytes into the str-only content handling below.
-            self.append_styled_content(
-                "🔒 This log is encrypted. Viewing encrypted logs isn't supported yet.",
-                color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
-            )
-            self.log_viewer.append("\n")
-            return
 
         line_count = log_content.count_lines(content)
         header_had_unknown_lines = file_info.get("total_lines") is None
@@ -565,9 +583,10 @@ class MainWindow(QMainWindow):
         self.log_viewer.append("\n")
 
         if header_had_unknown_lines:
-            self._update_header_line_count(line_count, file_path, file_info["size_human"], updated_today_note)
+            self._update_header_line_count(
+                line_count, file_path, file_info["size_human"], updated_today_note, lines_label)
 
-    def _update_header_line_count(self, line_count: int, file_path: str = None, size_human: str = None, updated_today_note: str = "") -> None:
+    def _update_header_line_count(self, line_count: int, file_path: str = None, size_human: str = None, updated_today_note: str = "", lines_label: str = "Lines") -> None:
         """Replace 'Lines: Unknown' in the header with the actual line count, then append the same header at the end."""
         vbar = self.log_viewer.verticalScrollBar()
         scroll_value = vbar.value()
@@ -576,16 +595,16 @@ class MainWindow(QMainWindow):
         cursor = self.log_viewer.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.Start)
         self.log_viewer.setTextCursor(cursor)
-        if self.log_viewer.find("Lines: Unknown"):
+        if self.log_viewer.find(f"{lines_label}: Unknown"):
             cursor = self.log_viewer.textCursor()
-            cursor.insertText(f"Lines: {line_count:,}")
+            cursor.insertText(f"{lines_label}: {line_count:,}")
 
         if file_path is not None and size_human is not None:
             cursor.movePosition(QTextCursor.MoveOperation.End)
             self.log_viewer.setTextCursor(cursor)
             self.log_viewer.append("\n")
             self.append_styled_content(f"=== {os.path.basename(file_path)} ===", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
-            self.append_styled_content(f"Size: {size_human} | Lines: {line_count:,}{updated_today_note}", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+            self.append_styled_content(f"Size: {size_human} | {lines_label}: {line_count:,}{updated_today_note}", color=ThemeManager.DARK_THEME["log_viewer"]["info"])
 
         if at_bottom:
             vbar.setValue(vbar.maximum())

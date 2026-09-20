@@ -156,3 +156,153 @@ def test_validate_file_for_viewing_accepts_encrypted_log(tmp_path, handler):
     is_valid, reason, info = handler.validate_file_for_viewing(str(encrypted_file))
 
     assert is_valid is True
+
+
+# ---------------------------------------------------------------------------
+# read_tail_safe: loading the end of a file without reading all of it
+# ---------------------------------------------------------------------------
+
+
+def _numbered_lines(count):
+    """Bytes, not text: the tail read works in binary, so on-disk content has to
+    be exact - write_text would translate the line endings on Windows."""
+    return b"".join(b"line %05d\n" % i for i in range(count))
+
+
+def test_read_tail_safe_returns_a_small_file_whole(tmp_path, handler):
+    """A file that already fits comes back untouched, so a caller can use this
+    for every file and let the size decide."""
+    log_file = tmp_path / "app.log"
+    log_file.write_bytes(b"line one\nline two\n")
+
+    success, content, info = handler.read_tail_safe(str(log_file), max_bytes=4096)
+
+    assert success is True
+    assert content == "line one\nline two\n"
+    assert info["is_tail"] is False
+
+
+def test_read_tail_safe_returns_only_the_end_of_a_large_file(tmp_path, handler):
+    log_file = tmp_path / "app.log"
+    log_file.write_bytes(_numbered_lines(2000))
+
+    success, content, info = handler.read_tail_safe(str(log_file), max_bytes=2048)
+
+    assert success is True
+    assert info["is_tail"] is True
+    assert "line 01999" in content      # the end of the file is what is shown
+    assert "line 00000" not in content  # the start of it is not
+
+
+def test_read_tail_safe_starts_at_a_line_boundary(tmp_path, handler):
+    """A slice taken mid-file starts mid-line, and half a log entry reads as a
+    corrupt one."""
+    log_file = tmp_path / "app.log"
+    log_file.write_bytes(_numbered_lines(2000))
+
+    _success, content, _info = handler.read_tail_safe(str(log_file), max_bytes=2048)
+
+    assert all(line.startswith("line ") for line in content.splitlines())
+
+
+def test_read_tail_safe_honours_the_byte_budget(tmp_path, handler):
+    log_file = tmp_path / "app.log"
+    log_file.write_bytes(_numbered_lines(2000))
+
+    _success, _content, info = handler.read_tail_safe(str(log_file), max_bytes=2048)
+
+    assert info["shown_bytes"] <= 2048
+    assert info["shown_size_human"]
+
+
+def test_read_tail_safe_keeps_content_with_no_line_break(tmp_path, handler):
+    """Dropping the partial first line would leave nothing at all to show."""
+    log_file = tmp_path / "app.log"
+    log_file.write_bytes(b"x" * 5000)
+
+    success, content, info = handler.read_tail_safe(str(log_file), max_bytes=1024)
+
+    assert success is True
+    assert info["is_tail"] is True
+    assert len(content) == 1024
+
+
+def test_read_tail_safe_reads_the_end_of_a_compressed_file(tmp_path, handler):
+    gz_file = tmp_path / "app.log.gz"
+    with gzip.open(gz_file, "wt", encoding="utf-8", newline="") as f:
+        f.write(_numbered_lines(2000).decode("ascii"))
+
+    success, content, info = handler.read_tail_safe(str(gz_file), max_bytes=2048)
+
+    assert success is True
+    assert info["is_tail"] is True
+    assert "line 01999" in content
+    assert "line 00000" not in content
+
+
+def test_read_tail_safe_returns_a_small_compressed_file_whole(tmp_path, handler):
+    gz_file = tmp_path / "app.log.gz"
+    with gzip.open(gz_file, "wt", encoding="utf-8", newline="") as f:
+        f.write("compressed content\n")
+
+    success, content, info = handler.read_tail_safe(str(gz_file), max_bytes=4096)
+
+    assert success is True
+    assert content == "compressed content\n"
+    assert info["is_tail"] is False
+
+
+def test_read_tail_safe_ignores_the_whole_file_size_limit(tmp_path, handler, monkeypatch):
+    """The point of reading the tail: the cost does not depend on the size, so
+    the ceiling that protects whole-file reads does not apply."""
+    monkeypatch.setattr(FileHandler, "MAX_FILE_SIZE", 10)
+    log_file = tmp_path / "app.log"
+    log_file.write_bytes(_numbered_lines(100))
+
+    success, content, info = handler.read_tail_safe(str(log_file), max_bytes=256)
+
+    assert success is True
+    assert "line 00099" in content
+
+
+def test_read_tail_safe_rejects_a_binary_file(tmp_path, handler):
+    binary_file = tmp_path / "app.log"
+    binary_file.write_bytes(bytes(range(256)) * 20)
+
+    success, _content, info = handler.read_tail_safe(str(binary_file))
+
+    assert success is False
+    assert "error" in info
+
+
+def test_read_tail_safe_hands_back_an_encrypted_log_whole(tmp_path, handler):
+    """An encrypted log is a stream of length-prefixed records, which cannot be
+    read from an arbitrary offset."""
+    raw = os.urandom(2048)
+    encrypted_file = tmp_path / "app.log.enc"
+    encrypted_file.write_bytes(raw)
+
+    success, content, _info = handler.read_tail_safe(str(encrypted_file), max_bytes=256)
+
+    assert success is True
+    assert content == raw
+
+
+def test_tail_safe_encodings_exclude_the_multi_byte_ones():
+    """A tail is cut at a b'\\n', which only means a line break in these."""
+    assert FileHandler._is_tail_safe_encoding("utf-8")
+    assert FileHandler._is_tail_safe_encoding("ascii")
+    assert FileHandler._is_tail_safe_encoding("cp1252")
+    assert not FileHandler._is_tail_safe_encoding("utf-16")
+    assert not FileHandler._is_tail_safe_encoding("utf-16-le")
+
+
+def test_validate_file_for_viewing_no_longer_rejects_on_size(tmp_path, handler, monkeypatch):
+    monkeypatch.setattr(FileHandler, "MAX_FILE_SIZE", 10)
+    log_file = tmp_path / "app.log"
+    log_file.write_bytes(b"x" * 100)
+
+    is_valid, _reason, _info = handler.validate_file_for_viewing(str(log_file))
+
+    assert is_valid is True
+

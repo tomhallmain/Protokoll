@@ -55,7 +55,11 @@ class ConfigManager:
             "log_viewer": {
                 "font_size": 12,
                 "font_family": "Consolas",
-                "line_wrap": True
+                "line_wrap": True,
+                # How much of a log file's end the viewer loads. Everything
+                # before it stays on disk, so opening a huge file costs the same
+                # as opening a small one.
+                "max_load_bytes": 2 * 1024 * 1024
             },
             "search": {
                 "show_line_numbers": True,
