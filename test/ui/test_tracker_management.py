@@ -27,7 +27,8 @@ def _fake_tracker_dialog_class(return_data, accepted=True):
             return accepted
 
         def get_tracker_data(self):
-            return return_data
+            # The real dialog always has these fields, left blank unless filled in.
+            return {"log_encryption_service": "", "log_encryption_app_id": "", **return_data}
 
     return FakeTrackerDialog
 
@@ -247,3 +248,48 @@ def test_editing_a_tracker_without_a_delete_leaves_it_alone(qtbot, window, tmp_p
 
     assert Tracker.load("my-app", window.config_manager) is not None
 
+
+
+def test_create_tracker_saves_the_log_encryption_identity(qtbot, window, tmp_path, monkeypatch):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    monkeypatch.setattr(
+        "src.ui.main_window.TrackerDialog",
+        _fake_tracker_dialog_class({
+            "name": "my-app",
+            "description": "",
+            "log_directories": [str(log_dir)],
+            "log_encryption_service": "SomeService",
+            "log_encryption_app_id": "some_app",
+        }),
+    )
+
+    window.create_tracker()
+
+    loaded = Tracker.load("my-app", window.config_manager)
+    assert loaded.log_encryption_service == "SomeService"
+    assert loaded.log_encryption_app_id == "some_app"
+
+
+def test_edit_tracker_can_clear_the_log_encryption_identity(qtbot, window, tmp_path, monkeypatch):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    tracker = Tracker("my-app", config_manager=window.config_manager)
+    tracker.set_log_encryption("SomeService", "some_app")
+    tracker.set_log_directories([str(log_dir)])
+    window.load_trackers()
+    item = window.tracker_list.findItems("my-app", Qt.MatchFlag.MatchExactly)[0]
+    monkeypatch.setattr(
+        "src.ui.main_window.TrackerDialog",
+        _fake_tracker_dialog_class({
+            "name": "my-app",
+            "description": "",
+            "log_directories": [str(log_dir)],
+        }),
+    )
+
+    window.edit_tracker(item)
+
+    loaded = Tracker.load("my-app", window.config_manager)
+    assert loaded.log_encryption_service == ""
+    assert loaded.log_encryption_app_id == ""

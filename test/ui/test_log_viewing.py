@@ -3,11 +3,11 @@ UI tests (pytest-qt) for MainWindow.display_log_file: the "reading log files" pa
 that loads a selected file's content into the log viewer.
 """
 
-import os
 import re
 
 import pytest
 
+from src.internal.tracker import Tracker
 from src.utils.translations import _
 
 pytestmark = pytest.mark.ui
@@ -141,18 +141,43 @@ def test_display_log_file_loads_large_multiline_file_in_chunks(qtbot, window, tm
     _assert_in(_msg_start("Size: {0}"), result)  # size/line-count header line intact too
 
 
-def test_display_log_file_handles_encrypted_log_without_crashing(qtbot, window, tmp_path):
-    """read_file_safe returns raw bytes (not str) for .enc files; display_log_file must
-    show that plainly instead of feeding bytes into its str-only content handling."""
+def _select_tracker_for(window, log_dir, **encryption):
+    tracker = Tracker("my-app", config_manager=window.config_manager)
+    if encryption:
+        tracker.set_log_encryption(encryption.get("service", ""), encryption.get("app_id", ""))
+    tracker.add_log_directory(str(log_dir))
+    window.current_tracker = tracker
+    return tracker
+
+
+def test_display_log_file_decrypts_an_encrypted_log(qtbot, window, tmp_path, write_encrypted_log):
+    """No settings on the tracker: the app ID is guessed from the file name."""
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
-    encrypted_file = log_dir / "app.log.enc"
-    encrypted_file.write_bytes(os.urandom(64))
+    encrypted_file = write_encrypted_log(
+        log_dir / "app_2026-09-30.log.enc", ["INFO started", "ERROR it broke"], app_identifier="app")
+    _select_tracker_for(window, log_dir)
 
     window.display_log_file(str(encrypted_file))
 
     result = window.log_viewer.toPlainText()
-    _assert_in(_("🔒 This log is encrypted. Viewing encrypted logs isn't supported yet."), result)
+    _assert_in("INFO started", result)
+    _assert_in("ERROR it broke", result)
+    _assert_in(_("🔒 Encrypted log, decrypted for viewing"), result)
+
+
+def test_display_log_file_explains_an_encrypted_log_it_cannot_open(
+        qtbot, window, tmp_path, write_encrypted_log):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    encrypted_file = write_encrypted_log(log_dir / "app.log.enc", ["INFO secret"], app_identifier="app")
+    _select_tracker_for(window, log_dir, app_id="wrong")
+
+    window.display_log_file(str(encrypted_file))
+
+    result = window.log_viewer.toPlainText()
+    _assert_not_in("INFO secret", result)
+    _assert_in(_msg_start("This log is encrypted, and no key found for it opens it (tried: {0})."), result)
 
 
 def test_display_log_file_shows_only_the_tail_of_a_large_file(qtbot, window, tmp_path):

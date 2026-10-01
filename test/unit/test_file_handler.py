@@ -11,8 +11,17 @@ import os
 import pytest
 
 from src.utils.file_handler import FileHandler
+from src.utils.globals import AppInfo
+from src.utils.translations import _
 
 pytestmark = pytest.mark.unit
+
+LOG_SERVICE = AppInfo.LOG_ENCRYPTION_SERVICE
+
+
+def _msg_start(msgid):
+    """The literal opening of a translated message, before its first placeholder."""
+    return _(msgid).split("{0}")[0]
 
 
 @pytest.fixture
@@ -94,18 +103,15 @@ def test_read_file_safe_returns_text_content(tmp_path, handler):
     assert isinstance(content, str)
 
 
-def test_read_file_safe_encrypted_log_returns_raw_bytes(tmp_path, handler):
-    """Decryption needs service_name/app_identifier the caller must supply - FileHandler
-    itself just hands back the untouched ciphertext instead of trying to decode it as text."""
-    encrypted_file = tmp_path / "app.log.enc"
-    raw = os.urandom(128)
-    encrypted_file.write_bytes(raw)
+def test_read_file_safe_decrypts_an_encrypted_log(tmp_path, handler, write_encrypted_log):
+    encrypted_file = write_encrypted_log(tmp_path / "app.log.enc", ["first", "second"])
 
-    success, content, info = handler.read_file_safe(str(encrypted_file))
+    success, content, info = handler.read_file_safe(
+        str(encrypted_file), key_candidates=[(LOG_SERVICE, "app")])
 
     assert success is True
-    assert isinstance(content, bytes)
-    assert content == raw
+    assert content == "first\nsecond\n"
+    assert info["skipped_records"] == 0
 
 
 def test_read_file_safe_rejects_oversized_file(tmp_path, handler):
@@ -275,17 +281,118 @@ def test_read_tail_safe_rejects_a_binary_file(tmp_path, handler):
     assert "error" in info
 
 
-def test_read_tail_safe_hands_back_an_encrypted_log_whole(tmp_path, handler):
-    """An encrypted log is a stream of length-prefixed records, which cannot be
-    read from an arbitrary offset."""
-    raw = os.urandom(2048)
-    encrypted_file = tmp_path / "app.log.enc"
-    encrypted_file.write_bytes(raw)
+def test_read_tail_safe_keeps_the_last_whole_records_of_an_encrypted_log(
+        tmp_path, handler, write_encrypted_log):
+    lines = [f"line {i:05d}" for i in range(2000)]
+    encrypted_file = write_encrypted_log(tmp_path / "app.log.enc", lines)
 
-    success, content, _info = handler.read_tail_safe(str(encrypted_file), max_bytes=256)
+    success, content, info = handler.read_tail_safe(
+        str(encrypted_file), max_bytes=256, key_candidates=[(LOG_SERVICE, "app")])
 
     assert success is True
-    assert content == raw
+    assert info["is_tail"] is True
+    assert content.endswith("line 01999\n")
+    assert "line 00000" not in content
+    assert all(line.startswith("line ") and len(line) == 10 for line in content.splitlines())
+
+
+def test_read_tail_safe_shows_a_small_encrypted_log_whole(tmp_path, handler, write_encrypted_log):
+    encrypted_file = write_encrypted_log(tmp_path / "app.log.enc", ["only line"])
+
+    success, content, info = handler.read_tail_safe(
+        str(encrypted_file), max_bytes=256, key_candidates=[(LOG_SERVICE, "app")])
+
+    assert success is True
+    assert info["is_tail"] is False
+    assert content == "only line\n"
+
+
+def test_encrypted_log_opens_with_the_first_candidate_that_fits(
+        tmp_path, handler, write_encrypted_log, fake_keyring):
+    encrypted_file = write_encrypted_log(tmp_path / "app.log.enc", ["hello"], app_identifier="app")
+    # A second identity with a passphrase of its own: found, but the wrong key.
+    write_encrypted_log(tmp_path / "other.log.enc", ["x"], app_identifier="other")
+
+    success, content, _info = handler.read_file_safe(
+        str(encrypted_file),
+        key_candidates=[(LOG_SERVICE, "missing"), (LOG_SERVICE, "other"), (LOG_SERVICE, "app")])
+
+    assert success is True
+    assert content == "hello\n"
+
+
+def test_encrypted_log_candidates_that_miss_leave_no_keyring_entry(
+        tmp_path, handler, write_encrypted_log, fake_keyring):
+    encrypted_file = write_encrypted_log(tmp_path / "app.log.enc", ["hello"])
+    before = dict(fake_keyring)
+
+    success, _content, info = handler.read_file_safe(
+        str(encrypted_file), key_candidates=[(LOG_SERVICE, "typo"), ("TypoService", "app")])
+
+    assert success is False
+    assert fake_keyring == before
+    assert _msg_start("This log is encrypted, and no key found for it opens it (tried: {0}).") in info["error"]
+    assert f"{LOG_SERVICE} / typo" in info["error"]
+
+
+def test_encrypted_log_without_candidates_says_so(tmp_path, handler, write_encrypted_log):
+    encrypted_file = write_encrypted_log(tmp_path / "app.log.enc", ["hello"])
+
+    success, _content, info = handler.read_file_safe(str(encrypted_file))
+
+    assert success is False
+    assert _("This log is encrypted, and there is no service name and app ID "
+             "to look up its key with.") in info["error"]
+
+
+def test_encrypted_log_record_that_fails_is_skipped_and_counted(tmp_path, handler, write_encrypted_log):
+    encrypted_file = write_encrypted_log(tmp_path / "app.log.enc", ["first", "second", "third"])
+    data = bytearray(encrypted_file.read_bytes())
+    # Flip a ciphertext byte in the second record; its length prefix stays intact.
+    first_length = int.from_bytes(data[:4], "big")
+    data[4 + first_length + 4 + 12 + 16] ^= 0xFF
+    encrypted_file.write_bytes(bytes(data))
+
+    success, content, info = handler.read_file_safe(
+        str(encrypted_file), key_candidates=[(LOG_SERVICE, "app")])
+
+    assert success is True
+    assert content == "first\nthird\n"
+    assert info["skipped_records"] == 1
+
+
+def test_encrypted_log_ignores_a_record_still_being_written(tmp_path, handler, write_encrypted_log):
+    encrypted_file = write_encrypted_log(tmp_path / "app.log.enc", ["done", "in progress"])
+    encrypted_file.write_bytes(encrypted_file.read_bytes()[:-5])
+
+    success, content, _info = handler.read_file_safe(
+        str(encrypted_file), key_candidates=[(LOG_SERVICE, "app")])
+
+    assert success is True
+    assert content == "done\n"
+
+
+def test_empty_encrypted_log_reads_as_empty(tmp_path, handler):
+    encrypted_file = tmp_path / "app.log.enc"
+    encrypted_file.write_bytes(b"")
+
+    success, content, _info = handler.read_file_safe(
+        str(encrypted_file), key_candidates=[(LOG_SERVICE, "app")])
+
+    assert success is True
+    assert content == ""
+
+
+def test_enc_file_that_is_not_a_record_stream_is_an_error(tmp_path, handler):
+    encrypted_file = tmp_path / "app.log.enc"
+    # A length prefix far past the end of the file: no whole record.
+    encrypted_file.write_bytes(b"\xff\xff\xff\xff" + os.urandom(64))
+
+    success, _content, info = handler.read_file_safe(
+        str(encrypted_file), key_candidates=[(LOG_SERVICE, "app")])
+
+    assert success is False
+    assert info["error"] == _("This file does not contain any readable encrypted log records.")
 
 
 def test_tail_safe_encodings_exclude_the_multi_byte_ones():

@@ -148,6 +148,32 @@ def fake_keyring(monkeypatch):
     return fake.store
 
 
+@pytest.fixture
+def write_encrypted_log(fake_keyring):
+    """
+    Append lines to a StreamingLogCipher log as a producer app would, and return its path.
+
+    The app's passphrase goes straight into the fake keyring, as the producer's
+    first run leaves it. Going through PassphraseManager instead would also try
+    to lock the real Secret Service collection over D-Bus on Linux.
+    """
+    if encryptor_module is None:
+        pytest.skip("cryptography/keyring not installed")
+    from src.utils.globals import AppInfo
+
+    def write(path, lines, service_name=AppInfo.LOG_ENCRYPTION_SERVICE, app_identifier="app"):
+        fake_keyring.setdefault(
+            (service_name, encryptor_module.namespaced_key(app_identifier, "passphrase")),
+            f"test-passphrase-{service_name}-{app_identifier}")
+        key = encryptor_module.StreamingLogCipher.find_key(service_name, app_identifier)
+        with open(path, "ab") as f:
+            for line in lines:
+                f.write(encryptor_module.StreamingLogCipher.encrypt_record(key, line.encode("utf-8")))
+        return path
+
+    return write
+
+
 @pytest.fixture(autouse=True)
 def reset_encryptor_cache():
     """

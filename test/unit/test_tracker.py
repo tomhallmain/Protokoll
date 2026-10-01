@@ -5,8 +5,9 @@ discovery, and metadata persistence through the encrypted cache.
 
 import pytest
 
-from src.internal.tracker import Tracker
+from src.internal.tracker import Tracker, app_identifier_from_log_name
 from src.utils.config_manager import ConfigManager
+from src.utils.globals import AppInfo
 
 pytestmark = pytest.mark.unit
 
@@ -223,3 +224,76 @@ def test_search_logs_finds_matching_lines(tmp_path, config_manager):
     assert len(results) == 1
     assert results[0]["line"] == 2
     assert "ERROR" in results[0]["content"]
+
+
+# ---------------------------------------------------------------------------
+# Encrypted logs: which keyring identities to try
+# ---------------------------------------------------------------------------
+
+
+def test_log_encryption_settings_survive_a_save_and_load(tmp_path, config_manager):
+    tracker = Tracker("my-app", config_manager=config_manager)
+    tracker.set_log_encryption("  SomeService ", " some_app ")
+    tracker.save_metadata()
+
+    loaded = Tracker.load("my-app", config_manager)
+
+    assert loaded.log_encryption_service == "SomeService"
+    assert loaded.log_encryption_app_id == "some_app"
+
+
+def test_a_tracker_saved_before_log_encryption_loads_with_none_set(config_manager):
+    config_manager.save_tracker_metadata("old", {
+        "name": "old", "description": "", "created_at": "2026-01-01T00:00:00",
+        "log_directories": [],
+    })
+
+    loaded = Tracker.load("old", config_manager)
+
+    assert loaded.log_encryption_service == ""
+    assert loaded.log_encryption_app_id == ""
+
+
+def test_key_candidates_guess_the_app_id_from_the_file_then_the_tracker_name(config_manager):
+    tracker = Tracker("SD Runner", config_manager=config_manager)
+
+    candidates = tracker.log_key_candidates("/logs/sd_runner_2026-09-30.log.enc")
+
+    # Both guesses land on the same identifier here, so it is tried once.
+    assert candidates == [(AppInfo.LOG_ENCRYPTION_SERVICE, "sd_runner")]
+
+
+def test_key_candidates_try_both_guesses_when_they_differ(config_manager):
+    tracker = Tracker("My Tool", config_manager=config_manager)
+
+    candidates = tracker.log_key_candidates("/logs/worker.log.enc")
+
+    assert candidates == [
+        (AppInfo.LOG_ENCRYPTION_SERVICE, "worker"),
+        (AppInfo.LOG_ENCRYPTION_SERVICE, "my_tool"),
+    ]
+
+
+def test_key_candidates_use_only_an_app_id_set_on_the_tracker(config_manager):
+    tracker = Tracker("my-app", config_manager=config_manager)
+    tracker.set_log_encryption("", "explicit")
+
+    assert tracker.log_key_candidates("/logs/other_2026-09-30.log.enc") == [
+        (AppInfo.LOG_ENCRYPTION_SERVICE, "explicit")]
+
+
+def test_key_candidates_use_a_service_set_on_the_tracker(config_manager):
+    tracker = Tracker("my-app", config_manager=config_manager)
+    tracker.set_log_encryption("OtherService", "")
+
+    assert tracker.log_key_candidates("/logs/app.log.enc")[0] == ("OtherService", "app")
+
+
+@pytest.mark.parametrize("file_name, expected", [
+    ("sd_runner_2026-09-30.log.enc", "sd_runner"),
+    ("app-2026-09-30.log.enc", "app"),
+    ("app.log.enc", "app"),
+    ("2026-09-30.log.enc", ""),
+])
+def test_app_identifier_from_log_name(file_name, expected):
+    assert app_identifier_from_log_name(file_name) == expected

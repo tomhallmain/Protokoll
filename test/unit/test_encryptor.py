@@ -82,6 +82,27 @@ def test_streaming_log_cipher_stops_cleanly_on_truncated_trailing_record():
     assert decrypted == [b"complete record"]
 
 
+def test_streaming_log_cipher_payloads_are_the_records_undecrypted():
+    key = get_log_cipher_key("TestService", "logs")
+    stream = io.BytesIO(encrypt_log_record(key, b"one") + encrypt_log_record(key, b"two"))
+
+    payloads = list(StreamingLogCipher.iter_payloads(stream))
+
+    assert [StreamingLogCipher.decrypt_record(key, p) for p in payloads] == [b"one", b"two"]
+
+
+def test_find_key_matches_the_key_the_writer_derives(fake_keyring):
+    writer_key = get_log_cipher_key("TestService", "logs")
+
+    assert StreamingLogCipher.find_key("TestService", "logs") == writer_key
+
+
+def test_find_key_creates_no_passphrase_for_an_unknown_identity(fake_keyring):
+    """The reader guesses at identities; a guess must not leave a keyring entry."""
+    assert StreamingLogCipher.find_key("TestService", "never-written") is None
+    assert fake_keyring == {}
+
+
 def test_symmetric_encryptor_roundtrip_compressible_data(tmp_path):
     data = b"log payload " * 200  # highly redundant, should compress
     out = tmp_path / "out.enc"

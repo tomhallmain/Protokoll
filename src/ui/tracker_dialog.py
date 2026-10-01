@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel,
                             QListWidgetItem, QFileDialog, QMessageBox)
 from PyQt6.QtCore import Qt
 
+from ..utils.globals import AppInfo
 from ..utils.theme_manager import ThemeManager
 from ..utils.logging_setup import get_logger
 from ..utils.translations import _
@@ -106,7 +107,40 @@ class TrackerDialog(QDialog):
         dir_buttons_layout.addWidget(add_btn)
         dir_buttons_layout.addWidget(remove_btn)
         form_layout.addLayout(dir_buttons_layout)
-        
+
+        # Encrypted logs (.enc): optional, since the key is usually found without them.
+        encryption_label = QLabel(_("Encrypted logs"))
+        encryption_label.setObjectName("sectionHeader")
+        form_layout.addWidget(encryption_label)
+
+        encryption_help = QLabel(_(
+            "Only needed if this tracker's encrypted logs do not open. Enter the "
+            "service name and app ID the app writing them uses for its log key."))
+        encryption_help.setWordWrap(True)
+        form_layout.addWidget(encryption_help)
+
+        service_layout = QHBoxLayout()
+        service_label = QLabel(_("Service name:"))
+        service_label.setMinimumWidth(100)
+        self.encryption_service_input = QLineEdit()
+        self.encryption_service_input.setPlaceholderText(AppInfo.LOG_ENCRYPTION_SERVICE)
+        service_layout.addWidget(service_label)
+        service_layout.addWidget(self.encryption_service_input)
+        form_layout.addLayout(service_layout)
+
+        app_id_layout = QHBoxLayout()
+        app_id_label = QLabel(_("App ID:"))
+        app_id_label.setMinimumWidth(100)
+        self.encryption_app_id_input = QLineEdit()
+        self.encryption_app_id_input.setPlaceholderText(_("Detected from the log file name"))
+        app_id_layout.addWidget(app_id_label)
+        app_id_layout.addWidget(self.encryption_app_id_input)
+        form_layout.addLayout(app_id_layout)
+
+        if self.is_edit_mode:
+            self.encryption_service_input.setText(tracker.log_encryption_service)
+            self.encryption_app_id_input.setText(tracker.log_encryption_app_id)
+
         main_layout.addLayout(form_layout)
         
         # Dialog buttons
@@ -205,7 +239,9 @@ class TrackerDialog(QDialog):
         return {
             'name': self.name_input.text(),
             'description': self.desc_input.toPlainText(),
-            'log_directories': [self.dirs_list.item(i).text() for i in range(self.dirs_list.count())]
+            'log_directories': [self.dirs_list.item(i).text() for i in range(self.dirs_list.count())],
+            'log_encryption_service': self.encryption_service_input.text().strip(),
+            'log_encryption_app_id': self.encryption_app_id_input.text().strip(),
         }
     
     def accept(self):

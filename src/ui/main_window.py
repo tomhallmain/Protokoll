@@ -339,7 +339,8 @@ class MainWindow(QMainWindow):
                     description=data["description"],
                     config_manager=self.config_manager
                 )
-                
+                tracker.set_log_encryption(data["log_encryption_service"], data["log_encryption_app_id"])
+
                 tracker.set_log_directories(data["log_directories"])
                 
                 self.config_manager.add_recent_tracker(data["name"])
@@ -391,9 +392,10 @@ class MainWindow(QMainWindow):
             filename = os.path.basename(log_file["path"])
             size_info = log_file.get("size_human", "")
             compressed_indicator = "📦 " if log_file.get("is_compressed", False) else ""
+            encrypted_indicator = "🔒 " if log_file.get("is_encrypted", False) else ""
             warning_indicator = "⚠️ " if log_file.get("warnings") else ""
-            
-            display_text = f"{compressed_indicator}{warning_indicator}{filename}"
+
+            display_text = f"{compressed_indicator}{encrypted_indicator}{warning_indicator}{filename}"
             if size_info:
                 display_text += f" ({size_info})"
             
@@ -464,6 +466,10 @@ class MainWindow(QMainWindow):
         self.display_log_file(log_file_path)
         self.update_window_title()
 
+    def _log_key_candidates(self, file_path):
+        """Keys to try for an encrypted log: the current tracker's, or none without one."""
+        return self.current_tracker.log_key_candidates(file_path) if self.current_tracker else []
+
     def append_styled_content(self, text, color=None, bold=False, background_color=None):
         """Append content to the log viewer with optional styling"""
         self.log_viewer.append(ThemeManager.styled_span(
@@ -522,21 +528,11 @@ class MainWindow(QMainWindow):
         # being shown belongs in it.
         max_load_bytes = self.config_manager.get(
             "log_viewer.max_load_bytes", FileHandler.DEFAULT_TAIL_BYTES)
-        success, content, read_info = self.file_handler.read_tail_safe(file_path, max_load_bytes)
+        success, content, read_info = self.file_handler.read_tail_safe(
+            file_path, max_load_bytes, key_candidates=self._log_key_candidates(file_path))
 
         if not success:
             self.append_styled_content(_("❌ Error reading file: {0}").format(read_info.get("error", _("Unknown error"))), color=ThemeManager.DARK_THEME["log_viewer"]["error"])
-            self.log_viewer.append("\n")
-            return
-
-        if file_info.get("is_encrypted", False):
-            # read_tail_safe hands back raw ciphertext (bytes) for .enc files; there's no
-            # service_name/app_identifier wiring here yet to decrypt it, so show that plainly
-            # instead of feeding bytes into the str-only content handling below.
-            self.append_styled_content(
-                _("🔒 This log is encrypted. Viewing encrypted logs isn't supported yet."),
-                color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
-            )
             self.log_viewer.append("\n")
             return
 
@@ -562,12 +558,14 @@ class MainWindow(QMainWindow):
             color=ThemeManager.DARK_THEME["log_viewer"]["info"])
 
         if is_tail:
-            # A compressed file's size on disk is not what was decompressed, so
-            # only an uncompressed file can say what fraction is being shown.
-            of_what = (
-                _("the decompressed contents") if file_info.get("is_compressed", False)
-                else file_info["size_human"]
-            )
+            # A compressed or encrypted file's size on disk is not the size of
+            # its text, so only a plain file can say what fraction is shown.
+            if file_info.get("is_compressed", False):
+                of_what = _("the decompressed contents")
+            elif file_info.get("is_encrypted", False):
+                of_what = _("the decrypted contents")
+            else:
+                of_what = file_info["size_human"]
             self.append_styled_content(
                 _("⏱️  Showing the last {0} of {1}. Earlier lines are not loaded - "
                   "open the file in an editor to see them.").format(
@@ -576,7 +574,15 @@ class MainWindow(QMainWindow):
         
         if file_info.get("is_compressed", False):
             self.append_styled_content(_("📦 Compressed file detected"), color=ThemeManager.DARK_THEME["log_viewer"]["info"])
-        
+
+        if file_info.get("is_encrypted", False):
+            self.append_styled_content(_("🔒 Encrypted log, decrypted for viewing"), color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+            if read_info.get("skipped_records"):
+                self.append_styled_content(
+                    _("⚠️  {0} record(s) could not be decrypted and are not shown").format(
+                        read_info["skipped_records"]),
+                    color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
+
         if file_info.get("warnings"):
             for warning in file_info["warnings"]:
                 self.append_styled_content(f"⚠️  {warning}", color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
@@ -691,7 +697,8 @@ class MainWindow(QMainWindow):
         is_valid, reason, _file_info = self.file_handler.validate_file_for_viewing(log_file_path)
         if not is_valid:
             return None, ("validation", reason)
-        success, content, read_info = self.file_handler.read_file_safe(log_file_path)
+        success, content, read_info = self.file_handler.read_file_safe(
+            log_file_path, key_candidates=self._log_key_candidates(log_file_path))
         if not success:
             return None, ("read", read_info.get("error", _("Unknown error")))
         return self._find_matches_in_content(content, search_re, search_text_lower), None
@@ -886,7 +893,8 @@ class MainWindow(QMainWindow):
                 # Update tracker properties
                 tracker.name = data["name"]
                 tracker.description = data["description"]
-                
+                tracker.set_log_encryption(data["log_encryption_service"], data["log_encryption_app_id"])
+
                 tracker.set_log_directories(data["log_directories"])
                 logger.debug(f"Final directories after update: {tracker.get_log_directories()}")
 

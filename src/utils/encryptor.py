@@ -1566,7 +1566,27 @@ class StreamingLogCipher:
     @classmethod
     def derive_key(cls, service_name: str, app_identifier: str) -> bytes:
         """Derive the persistent per-app AES-256 key from the keyring-backed passphrase."""
-        passphrase = PassphraseManager.get_passphrase(service_name, app_identifier)
+        return cls.key_from_passphrase(PassphraseManager.get_passphrase(service_name, app_identifier))
+
+    @classmethod
+    def find_key(cls, service_name: str, app_identifier: str) -> Optional[bytes]:
+        """The key derive_key() would return, or None if no passphrase exists yet.
+
+        For the reading side: derive_key() creates and stores a passphrase when
+        none is found, so a reader trying a wrong identity would leave a keyring
+        entry behind for it. A passphrase found here is cached for the process,
+        so each log opened does not repeat the keychain read (a macOS prompt,
+        unless the user chose Always Allow).
+        """
+        passphrase = peek_passphrase(service_name, app_identifier)
+        if not passphrase:
+            return None
+        with _key_store_lock:
+            _passphrase_cache[(service_name, app_identifier)] = passphrase
+        return cls.key_from_passphrase(passphrase)
+
+    @classmethod
+    def key_from_passphrase(cls, passphrase: str) -> bytes:
         hkdf = HKDF(
             algorithm=hashes.SHA256(),
             length=32,
@@ -1597,11 +1617,11 @@ class StreamingLogCipher:
         return decryptor.update(ciphertext) + decryptor.finalize()
 
     @classmethod
-    def iter_decrypt(cls, key: bytes, stream):
+    def iter_payloads(cls, stream):
         """
-        Yield decrypted records from a binary stream written with encrypt_record.
-        Stops quietly on a truncated trailing record instead of raising, so a
-        reader can safely tail a log file that is still being written to.
+        Yield each record's payload (length prefix stripped, still encrypted)
+        from a binary stream written with encrypt_record. Stops quietly on a
+        truncated trailing record, so a file still being written to can be read.
         """
         while True:
             length_prefix = stream.read(4)
@@ -1611,6 +1631,16 @@ class StreamingLogCipher:
             payload = stream.read(length)
             if len(payload) < length:
                 return
+            yield payload
+
+    @classmethod
+    def iter_decrypt(cls, key: bytes, stream):
+        """
+        Yield decrypted records from a binary stream written with encrypt_record.
+        Stops quietly on a truncated trailing record instead of raising, so a
+        reader can safely tail a log file that is still being written to.
+        """
+        for payload in cls.iter_payloads(stream):
             yield cls.decrypt_record(key, payload)
 
 

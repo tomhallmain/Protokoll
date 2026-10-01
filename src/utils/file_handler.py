@@ -5,9 +5,13 @@ import zipfile
 import chardet
 import sys
 import warnings
+from collections import deque
 from pathlib import Path
-from typing import Optional, Tuple, Dict, Any, Union
+from typing import Optional, Tuple, Dict, Any, Sequence
 
+from cryptography.exceptions import InvalidTag
+
+from .encryptor import StreamingLogCipher
 from .logging_setup import get_logger
 from .translations import _
 
@@ -46,6 +50,8 @@ class FileHandler:
     # Naming convention for logs encrypted with StreamingLogCipher (e.g. "app.log.enc").
     # Ciphertext looks binary to the printable-ratio heuristic below, so files matching
     # this extension skip binary detection instead of being rejected as corrupted.
+    # Reading one takes key candidates: (service_name, app_identifier) pairs, tried in
+    # order until one opens the file.
     ENCRYPTED_LOG_EXTENSION = '.enc'
 
     # File size limits for whole-file reads (100MB max, 10MB warning). Tail reads
@@ -144,7 +150,7 @@ class FileHandler:
                 info["warnings"].append(_("Large file ({0})").format(info["size_human"]))
 
             # Binary detection - skipped for encrypted logs (ciphertext always looks binary
-            # to the printable-ratio heuristic; decryption happens elsewhere) and for
+            # to the printable-ratio heuristic; _read_encrypted_log decrypts it) and for
             # compressed files (their raw, still-compressed bytes look binary too; the
             # decompressed content is validated separately when it's actually decoded as
             # text in _read_compressed_file/read_file_safe).
@@ -210,8 +216,9 @@ class FileHandler:
             size_bytes /= 1024
         return f"{size_bytes:.1f}TB"
     
-    def read_file_safe(self, file_path: str, max_size: Optional[int] = None) -> Tuple[bool, Union[str, bytes], Dict[str, Any]]:
-        """Safe file reading with compression support and optimizations."""
+    def read_file_safe(self, file_path: str, max_size: Optional[int] = None,
+                       key_candidates: Sequence[Tuple[str, str]] = ()) -> Tuple[bool, str, Dict[str, Any]]:
+        """Safe file reading with compression and encrypted-log support."""
         max_size = max_size or self.MAX_FILE_SIZE
         file_info = self.get_file_info(file_path)
         
@@ -228,11 +235,8 @@ class FileHandler:
             return False, "", {"error": _("File may contain corrupted data or non-text content"), "warnings": file_info["warnings"]}
         
         try:
-            # Encrypted logs are handled by the caller (decryption needs the app's
-            # service_name/app_identifier); hand back the raw ciphertext untouched.
             if file_info.get("is_encrypted", False):
-                with open(file_path, 'rb') as f:
-                    return True, f.read(), file_info
+                return self._read_encrypted_log(file_path, file_info, key_candidates)
             # Handle compressed files
             if file_info["is_compressed"]:
                 content = self._read_compressed_file(file_path)
@@ -250,7 +254,8 @@ class FileHandler:
             logger.error(f"Read error: {str(e)}")
             return False, "", {"error": str(e)}
 
-    def read_tail_safe(self, file_path: str, max_bytes: Optional[int] = None) -> Tuple[bool, Union[str, bytes], Dict[str, Any]]:
+    def read_tail_safe(self, file_path: str, max_bytes: Optional[int] = None,
+                       key_candidates: Sequence[Tuple[str, str]] = ()) -> Tuple[bool, str, Dict[str, Any]]:
         """
         Read the end of a file, up to *max_bytes*, starting at a line boundary.
 
@@ -274,13 +279,10 @@ class FileHandler:
         if file_info.get("is_binary", False):
             return False, "", {"error": _("File may contain corrupted data or non-text content"), "warnings": file_info["warnings"]}
 
-        # An encrypted log is a stream of length-prefixed records, which cannot be
-        # read from an arbitrary offset, so it takes the whole-file path and its
-        # size limit.
-        if file_info.get("is_encrypted", False):
-            return self.read_file_safe(file_path)
-
         try:
+            if file_info.get("is_encrypted", False):
+                return self._read_encrypted_log(file_path, file_info, key_candidates, max_bytes)
+
             if file_info["is_compressed"]:
                 # Compressed formats have no seekable end, so the stream is
                 # decompressed in full; only the tail is held.
@@ -313,6 +315,80 @@ class FileHandler:
         except Exception as e:
             logger.error(f"Tail read error: {str(e)}")
             return False, "", {"error": str(e)}
+
+    def _read_encrypted_log(self, file_path: str, file_info: Dict[str, Any],
+                            key_candidates: Sequence[Tuple[str, str]],
+                            max_bytes: Optional[int] = None) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        Decrypt a StreamingLogCipher log, one record per line.
+
+        The key is the first candidate that opens the file's first record. With
+        *max_bytes*, only the last whole records fitting it are kept -- records
+        cannot be read from an arbitrary offset, so the whole file is still
+        decrypted. A later record that fails to decrypt is skipped and counted
+        in info["skipped_records"]; the ones after it are still tried, and a
+        wrong key never yields text, so this cannot show garbage.
+        """
+        records = deque()
+        kept_bytes = 0
+        is_tail = False
+        skipped = 0
+        key = None
+        with open(file_path, 'rb') as f:
+            for payload in StreamingLogCipher.iter_payloads(f):
+                if key is None:
+                    key, record = self._open_first_record(payload, key_candidates)
+                    if key is None:
+                        return False, "", {"error": self._no_log_key_message(key_candidates)}
+                else:
+                    try:
+                        record = StreamingLogCipher.decrypt_record(key, payload)
+                    except (InvalidTag, ValueError):
+                        skipped += 1
+                        continue
+                records.append(record)
+                kept_bytes += len(record) + 1
+                while max_bytes and kept_bytes > max_bytes and len(records) > 1:
+                    kept_bytes -= len(records.popleft()) + 1
+                    is_tail = True
+
+        # Bytes but not one whole record: not this format (a whole-file encrypted
+        # .enc, say), or a first record caught mid-write.
+        if key is None and file_info.get("size", 0) > 0:
+            return False, "", {"error": _("This file does not contain any readable encrypted log records.")}
+
+        raw_content = b"".join(record + b"\n" for record in records)
+        info = dict(file_info)
+        info["is_tail"] = is_tail
+        info["shown_bytes"] = len(raw_content)
+        info["shown_size_human"] = self._format_size(len(raw_content))
+        info["skipped_records"] = skipped
+        if skipped:
+            logger.warning(f"{file_path}: {skipped} record(s) did not decrypt and were skipped")
+        return True, self._decode_bytes(raw_content, 'utf-8'), info
+
+    @staticmethod
+    def _open_first_record(payload: bytes, key_candidates: Sequence[Tuple[str, str]]):
+        """(key, plaintext) for the first candidate whose key decrypts *payload*, else (None, None)."""
+        for service_name, app_identifier in key_candidates:
+            key = StreamingLogCipher.find_key(service_name, app_identifier)
+            if key is None:
+                continue
+            try:
+                return key, StreamingLogCipher.decrypt_record(key, payload)
+            except (InvalidTag, ValueError):
+                continue
+        return None, None
+
+    @staticmethod
+    def _no_log_key_message(key_candidates: Sequence[Tuple[str, str]]) -> str:
+        advice = _("Set the service name and app ID under \"Encrypted logs\" in this "
+                   "tracker's settings to the ones the app writing this log uses.")
+        if not key_candidates:
+            return _("This log is encrypted, and there is no service name and app ID "
+                     "to look up its key with.") + " " + advice
+        tried = ", ".join(f"{service} / {app}" for service, app in key_candidates)
+        return _("This log is encrypted, and no key found for it opens it (tried: {0}).").format(tried) + " " + advice
 
     @classmethod
     def _is_tail_safe_encoding(cls, encoding: str) -> bool:

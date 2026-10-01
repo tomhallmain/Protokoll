@@ -456,3 +456,19 @@ def test_multiline_toggle_persisted_to_config(qtbot, window):
 
     window.multiline_entries.setChecked(True)
     assert window.config_manager.get("search.multiline_entries") is True
+
+
+def test_search_all_files_includes_encrypted_logs(qtbot, window, tmp_path, write_encrypted_log):
+    log_file = _select_tracker_with_log_file(
+        window, tmp_path, "2026-08-24 10:00:01 INFO plain line\n")
+    write_encrypted_log(
+        log_file.parent / "app.log.enc",
+        ["2026-08-24 10:00:02 ERROR from the encrypted log"], app_identifier="app")
+    window.search_all_files.setChecked(True)
+
+    window.search_edit.setText("error")
+    window.search_logs()
+
+    result_text = window.log_viewer.toPlainText()
+    assert "ERROR from the encrypted log" in result_text
+    assert "plain line" not in result_text

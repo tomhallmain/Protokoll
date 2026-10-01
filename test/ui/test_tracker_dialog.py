@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import QDialog, QFileDialog, QMessageBox, QPushButton
 
 from src.internal.tracker import Tracker
 from src.ui.tracker_dialog import DELETE_REQUESTED, TrackerDialog
+from src.utils.globals import AppInfo
 from src.utils.translations import _
 
 pytestmark = pytest.mark.ui
@@ -56,7 +57,43 @@ def test_get_tracker_data_reflects_current_form_state(qtbot, tmp_path):
         "name": "new-tracker",
         "description": "desc text",
         "log_directories": [str(tmp_path)],
+        "log_encryption_service": "",
+        "log_encryption_app_id": "",
     }
+
+
+def test_edit_mode_prefills_the_log_encryption_identity(qtbot):
+    tracker = Tracker("my-app")
+    tracker.set_log_encryption("SomeService", "some_app")
+
+    dialog = TrackerDialog(tracker=tracker)
+    qtbot.addWidget(dialog)
+
+    assert dialog.encryption_service_input.text() == "SomeService"
+    assert dialog.encryption_app_id_input.text() == "some_app"
+
+
+def test_get_tracker_data_trims_the_log_encryption_identity(qtbot):
+    dialog = TrackerDialog()
+    qtbot.addWidget(dialog)
+    dialog.name_input.setText("my-app")
+    dialog.encryption_service_input.setText("  SomeService ")
+    dialog.encryption_app_id_input.setText(" some_app")
+
+    data = dialog.get_tracker_data()
+
+    assert data["log_encryption_service"] == "SomeService"
+    assert data["log_encryption_app_id"] == "some_app"
+
+
+def test_log_encryption_fields_start_blank_and_show_the_default_service(qtbot):
+    """Blank means guessed, so the placeholder has to say what blank stands for."""
+    dialog = TrackerDialog()
+    qtbot.addWidget(dialog)
+
+    assert dialog.encryption_service_input.text() == ""
+    assert dialog.encryption_app_id_input.text() == ""
+    assert dialog.encryption_service_input.placeholderText() == AppInfo.LOG_ENCRYPTION_SERVICE
 
 
 def test_remove_directory_removes_selected_item(qtbot, tmp_path):
