@@ -2,8 +2,8 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
-"POT-Creation-Date: 2026-09-19 21:31-0400\n"
-"PO-Revision-Date: 2026-09-19 21:31-0400\n"
+"POT-Creation-Date: 2026-10-04 17:22-0400\n"
+"PO-Revision-Date: 2026-10-04 17:22-0400\n"
 "Last-Translator: Translator Name <translator@example.com>\n"
 "Language-Team: ko Team <<EMAIL>>\n"
 "Language: ko\n"
@@ -12,13 +12,13 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: src/internal/log_directory_finder.py:110 src/internal/tracker.py:40
-#: src/internal/tracker.py:66 src/ui/tracker_dialog.py:228
+#: src/internal/log_directory_finder.py:110 src/internal/tracker.py:75
+#: src/internal/tracker.py:101 src/ui/tracker_dialog.py:264
 msgid "Directory does not exist: {0}"
 msgstr "디렉터리가 존재하지 않습니다: {0}"
 
-#: src/internal/log_directory_finder.py:112 src/internal/tracker.py:43
-#: src/internal/tracker.py:68
+#: src/internal/log_directory_finder.py:112 src/internal/tracker.py:78
+#: src/internal/tracker.py:103
 msgid "Path is not a directory: {0}"
 msgstr "경로가 디렉터리가 아닙니다: {0}"
 
@@ -66,7 +66,7 @@ msgstr "잠재적 일치:"
 msgid "Add Selected"
 msgstr "선택 항목 추가"
 
-#: src/ui/find_log_dirs_dialog.py:105 src/ui/tracker_dialog.py:120
+#: src/ui/find_log_dirs_dialog.py:105 src/ui/tracker_dialog.py:154
 msgid "Cancel"
 msgstr "취소"
 
@@ -78,157 +78,158 @@ msgstr "검색 오류"
 msgid "Found {0} exact matches and {1} potential matches"
 msgstr "정확히 일치하는 항목 {0}개와 잠재적인 일치 항목 {1}개를 찾았습니다"
 
-#: src/ui/main_window.py:69
+#: src/ui/main_window.py:78
 msgid ""
 "Your trackers could not be read, and no changes will be saved until that is "
 "resolved."
 msgstr "트래커를 읽을 수 없으며, 문제가 해결될 때까지 변경 사항이 저장되지 않습니다."
 
-#: src/ui/main_window.py:93 src/ui/tracker_dialog.py:34
-#: src/ui/tracker_dialog.py:44
+#: src/ui/main_window.py:102 src/ui/tracker_dialog.py:35
+#: src/ui/tracker_dialog.py:45 test/ui/test_tracker_dialog.py:28
 msgid "Create New Tracker"
 msgstr "새 트래커 만들기"
 
-#: src/ui/main_window.py:99
+#: src/ui/main_window.py:108
 msgid "Trackers"
 msgstr "트래커"
 
-#: src/ui/main_window.py:116
+#: src/ui/main_window.py:125
 msgid "Log Files"
 msgstr "로그 파일"
 
-#: src/ui/main_window.py:135
+#: src/ui/main_window.py:144
 msgid "Search in logs..."
 msgstr "로그 검색..."
 
-#: src/ui/main_window.py:137
+#: src/ui/main_window.py:146
 msgid "Search"
 msgstr "검색"
 
-#: src/ui/main_window.py:148
+#: src/ui/main_window.py:157
 msgid "Show line numbers"
 msgstr "줄 번호 표시"
 
-#: src/ui/main_window.py:156
+#: src/ui/main_window.py:165
 msgid "Use regular expression"
 msgstr "정규식 사용"
 
-#: src/ui/main_window.py:164
+#: src/ui/main_window.py:173
 msgid ""
 "Match only at start of log line (after level: INFO, ERROR, WARNING, DEBUG, "
 "TRACE)"
 msgstr "로그 라인의 시작(레벨: INFO, ERROR, WARNING, DEBUG, TRACE 뒤)에서만 일치"
 
-#: src/ui/main_window.py:172
+#: src/ui/main_window.py:181
 msgid "Search all log files in the tracker (not just the selected file)"
 msgstr "트래커의 모든 로그 파일을 검색 (선택한 파일만이 아니라)"
 
-#: src/ui/main_window.py:181
+#: src/ui/main_window.py:190
 msgid ""
 "Group multi-line logger calls (tracebacks, formatted messages) into single "
 "entries"
 msgstr "다중 행 로거 호출(트레이스백, 포맷된 메시지)을 단일 항목으로 그룹화"
 
-#: src/ui/main_window.py:188
+#: src/ui/main_window.py:197
 msgid "B:"
 msgstr "B:"
 
-#: src/ui/main_window.py:189
+#: src/ui/main_window.py:198
 msgid "Entries of context to show before each match"
 msgstr "각 일치 항목 앞에 표시할 컨텍스트 항목"
 
-#: src/ui/main_window.py:196
+#: src/ui/main_window.py:205
 msgid "A:"
 msgstr "A:"
 
-#: src/ui/main_window.py:197
+#: src/ui/main_window.py:206
 msgid "Entries of context to show after each match"
 msgstr "각 일치 후에 표시할 컨텍스트 항목"
 
-#: src/ui/main_window.py:201
+#: src/ui/main_window.py:210
 msgid "Clear"
 msgstr "지우기"
 
-#: src/ui/main_window.py:206
+#: src/ui/main_window.py:215
 msgid "Refresh"
 msgstr "새로고침"
 
-#: src/ui/main_window.py:223
+#: src/ui/main_window.py:232
 msgid "Open in Editor"
 msgstr "편집기에서 열기"
 
-#: src/ui/main_window.py:229
+#: src/ui/main_window.py:238
 msgid "Use Default Editor"
 msgstr "기본 편집기 사용"
 
-#: src/ui/main_window.py:232
+#: src/ui/main_window.py:241
 msgid "Copy path to clipboard"
 msgstr "경로를 클립보드에 복사"
 
-#: src/ui/main_window.py:235
+#: src/ui/main_window.py:244
 msgid "Configure Custom Editor..."
 msgstr "맞춤 편집기 구성..."
 
-#: src/ui/main_window.py:242
+#: src/ui/main_window.py:251
 msgid "Current: {0}"
 msgstr "현재: {0}"
 
-#: src/ui/main_window.py:244 src/ui/main_window.py:1005
+#: src/ui/main_window.py:253 src/ui/main_window.py:1187
 msgid "Clear Custom Editor"
 msgstr "사용자 정의 편집기 지우기"
 
-#: src/ui/main_window.py:354 src/ui/main_window.py:872
-#: src/ui/main_window.py:903 src/ui/main_window.py:911
-#: src/ui/main_window.py:1021
+#: src/ui/main_window.py:372 src/ui/main_window.py:1052
+#: src/ui/main_window.py:1084 src/ui/main_window.py:1092
+#: src/ui/main_window.py:1208
 msgid "Error"
 msgstr "오류"
 
-#: src/ui/main_window.py:354
+#: src/ui/main_window.py:372
 msgid "Failed to create tracker: {0}"
 msgstr "트래커 생성에 실패했습니다: {0}"
 
-#: src/ui/main_window.py:405
+#: src/ui/main_window.py:426
 msgid "Path: {0}"
 msgstr "경로: {0}"
 
-#: src/ui/main_window.py:406 src/ui/main_window.py:558
-#: src/ui/main_window.py:624
+#: src/ui/main_window.py:427 src/ui/main_window.py:702
+#: src/ui/main_window.py:791
 msgid "Size: {0}"
 msgstr "크기: {0}"
 
-#: src/ui/main_window.py:409
+#: src/ui/main_window.py:430
 msgid "Warnings:"
 msgstr "경고:"
 
-#: src/ui/main_window.py:433 src/ui/main_window.py:789
+#: src/ui/main_window.py:454 src/ui/main_window.py:996
 msgid "No log files found in the tracked directories."
 msgstr "추적된 디렉터리에서 로그 파일을 찾을 수 없습니다."
 
-#: src/ui/main_window.py:434
+#: src/ui/main_window.py:455
 msgid "Add directories containing log files to this tracker."
 msgstr "로그 파일이 포함된 디렉터리를 이 트래커에 추가합니다."
 
-#: src/ui/main_window.py:450
+#: src/ui/main_window.py:471
 msgid "Last modified"
 msgstr "최종 수정"
 
-#: src/ui/main_window.py:480 test/ui/test_log_viewing.py:114
+#: src/ui/main_window.py:505 test/ui/test_log_viewing.py:124
 msgid "⚠️  File contains a very long line. Showing first 10KB:"
 msgstr "⚠️  파일에 매우 긴 줄이 포함되어 있습니다. 처음 10KB 표시:"
 
-#: src/ui/main_window.py:488
+#: src/ui/main_window.py:513
 msgid "... (truncated, original length: {0} characters)"
 msgstr "... (잘림, 원래 길이: {0} 문자)"
 
-#: src/ui/main_window.py:514
+#: src/ui/main_window.py:674
 msgid "⚠️  Cannot display file: {0}"
 msgstr "⚠️  파일을 표시할 수 없습니다: {0}"
 
-#: src/ui/main_window.py:528 src/ui/main_window.py:849
+#: src/ui/main_window.py:683 src/ui/main_window.py:1027
 msgid "❌ Error reading file: {0}"
 msgstr "❌ 파일 읽기 오류: {0}"
 
-#: src/ui/main_window.py:528 src/ui/main_window.py:696
+#: src/internal/log_search.py:57 src/ui/main_window.py:625
+#: src/ui/main_window.py:683
 msgid "Unknown error"
 msgstr "알 수 없는 오류"
 
@@ -236,300 +237,305 @@ msgstr "알 수 없는 오류"
 msgid "🔒 This log is encrypted. Viewing encrypted logs isn't supported yet."
 msgstr "🔒 이 로그는 암호화되었습니다. 암호화된 로그 보기 기능은 아직 지원되지 않습니다."
 
-#: src/ui/main_window.py:544
+#: src/ui/main_window.py:688
 msgid "Lines shown"
 msgstr "표시된 행"
 
-#: src/ui/main_window.py:544 src/ui/main_window.py:605
+#: src/ui/main_window.py:688 src/ui/main_window.py:772
 msgid "Lines"
 msgstr "줄"
 
-#: src/ui/main_window.py:552
+#: src/ui/main_window.py:696
 msgid "Updated today"
 msgstr "오늘 업데이트"
 
-#: src/ui/main_window.py:560 src/ui/main_window.py:613
+#: src/ui/main_window.py:704 src/ui/main_window.py:780
 msgid "Unknown"
 msgstr "알 수 없음"
 
-#: src/ui/main_window.py:568
+#: src/ui/main_window.py:712
 msgid "the decompressed contents"
 msgstr "압축 해제된 내용"
 
-#: src/ui/main_window.py:572
+#: src/ui/main_window.py:718
 msgid ""
 "⏱️  Showing the last {0} of {1}. Earlier lines are not loaded - open the "
 "file in an editor to see them."
 msgstr "⏱️  마지막 {0}/{1}를 표시합니다. 이전 줄은 로드되지 않았습니다 – 파일을 편집기에서 열어 확인하세요."
 
-#: src/ui/main_window.py:578
+#: src/ui/main_window.py:728
 msgid "📦 Compressed file detected"
 msgstr "📦 압축 파일이 감지되었습니다"
 
-#: src/ui/main_window.py:674
+#: src/ui/main_window.py:834
 msgid "Invalid regular expression: {0}"
 msgstr "잘못된 정규식: {0}"
 
-#: src/ui/main_window.py:721
+#: src/ui/main_window.py:878
 msgid "regex"
 msgstr "정규식"
 
-#: src/ui/main_window.py:721
+#: src/ui/main_window.py:878
 msgid "plain text"
 msgstr "일반 텍스트"
 
-#: src/ui/main_window.py:722
+#: src/ui/main_window.py:879
 msgid "limit to line start"
 msgstr "줄 시작으로 제한"
 
-#: src/ui/main_window.py:722
+#: src/ui/main_window.py:879
 msgid "full line"
 msgstr "전체 줄"
 
-#: src/ui/main_window.py:728 test/ui/test_search.py:205
-#: test/ui/test_search.py:405
+#: src/ui/main_window.py:885 test/ui/test_search.py:216
+#: test/ui/test_search.py:416
 msgid "File: {0} Found {1} matches"
 msgstr "파일: {0} {1}개의 일치 항목을 찾았습니다"
 
-#: src/ui/main_window.py:740
+#: src/ui/main_window.py:910
 msgid "Found {0} matches in {1} file(s) (searched {2} file(s))"
 msgstr "파일 {1}개에서 {0}개의 일치를 찾았습니다 (검색한 파일 {2}개)"
 
-#: src/ui/main_window.py:746 src/ui/main_window.py:822
+#: src/ui/main_window.py:896
 msgid "Skipped {0} file(s):"
 msgstr "건너뛴 {0} 파일:"
 
-#: src/ui/main_window.py:758
+#: src/ui/main_window.py:919
 msgid "{0} ({1} match(es))"
 msgstr "{0} ({1} 일치 항목)"
 
-#: src/ui/main_window.py:816
+#: src/ui/main_window.py:1010
 msgid "No matches found for '{0}' across {1} file(s) ({2}, {3})"
 msgstr "파일 {1}개에서 ‘{0}’에 대한 일치 항목을 찾을 수 없습니다 ({2}, {3})"
 
-#: src/ui/main_window.py:844
+#: src/ui/main_window.py:1022
 msgid "⚠️  Cannot search file: {0}"
 msgstr "⚠️  파일을 검색할 수 없습니다: {0}"
 
-#: src/ui/main_window.py:860
+#: src/ui/main_window.py:1040
 msgid "No matches found for '{0}' ({1}, {2})"
 msgstr "'{0}'에 대한 일치 항목을 찾을 수 없습니다 ({1}, {2})"
 
-#: src/ui/main_window.py:872
+#: src/ui/main_window.py:1052
 msgid "Failed to load tracker: {0}"
 msgstr "추적기를 불러오는 데 실패했습니다: {0}"
 
-#: src/ui/main_window.py:903
+#: src/ui/main_window.py:1084
 msgid "Failed to update tracker: {0}"
 msgstr "트래커 업데이트에 실패했습니다: {0}"
 
-#: src/ui/main_window.py:911
+#: src/ui/main_window.py:1092
 msgid "Failed to delete tracker: {0}"
 msgstr "트래커 삭제 실패: {0}"
 
-#: src/ui/main_window.py:922
+#: src/ui/main_window.py:1104
 msgid "Deleted tracker \"{0}\""
 msgstr "트래커 \"{0}\" 삭제됨"
 
-#: src/ui/main_window.py:935 src/ui/main_window.py:948
-#: src/ui/main_window.py:958
+#: src/ui/main_window.py:1117 src/ui/main_window.py:1130
+#: src/ui/main_window.py:1140
 msgid "No File Selected"
 msgstr "파일이 선택되지 않음"
 
-#: src/ui/main_window.py:935 src/ui/main_window.py:948
+#: src/ui/main_window.py:1117 src/ui/main_window.py:1130
 msgid "Please select a log file to open in the editor."
 msgstr "편집기에서 열 로그 파일을 선택하십시오."
 
-#: src/ui/main_window.py:942 src/ui/main_window.py:952
+#: src/ui/main_window.py:1124 src/ui/main_window.py:1134
 msgid "Opening in editor"
 msgstr "편집기에서 열기"
 
-#: src/ui/main_window.py:958
+#: src/ui/main_window.py:1140
 msgid "Please select a log file to copy its path."
 msgstr "경로를 복사하려면 로그 파일을 선택하십시오."
 
-#: src/ui/main_window.py:963
+#: src/ui/main_window.py:1145
 msgid "Path copied to clipboard"
 msgstr "경로가 클립보드에 복사되었습니다"
 
-#: src/ui/main_window.py:971
+#: src/ui/main_window.py:1153
 msgid "Configure Custom Editor"
 msgstr "사용자 지정 편집기 구성"
 
-#: src/ui/main_window.py:972
+#: src/ui/main_window.py:1154
 msgid ""
 "Enter custom editor command (use {filepath} as placeholder for file path):"
 msgstr "사용자 지정 편집기 명령 입력 ({filepath}를 파일 경로 자리 표시자로 사용):"
 
-#: src/ui/main_window.py:973
+#: src/ui/main_window.py:1155
 msgid "Examples:"
 msgstr "예:"
 
-#: src/ui/main_window.py:983
+#: src/ui/main_window.py:1165
 msgid "Invalid Command"
 msgstr "잘못된 명령"
 
-#: src/ui/main_window.py:984
+#: src/ui/main_window.py:1166
 msgid ""
 "The command must contain {filepath} as a placeholder for the file path."
 msgstr "명령에는 파일 경로 자리표시자로 {filepath} 가 포함되어야 합니다."
 
-#: src/ui/main_window.py:989
+#: src/ui/main_window.py:1171
 msgid "Executable Not Found"
 msgstr "실행 파일을 찾을 수 없습니다"
 
-#: src/ui/main_window.py:990
+#: src/ui/main_window.py:1172
 msgid "The executable '{0}' was not found in your system PATH."
 msgstr "실행 파일 '{0}'을(를) 시스템 PATH에서 찾을 수 없습니다."
 
-#: src/ui/main_window.py:991
+#: src/ui/main_window.py:1173
 msgid "Do you want to save this command anyway?"
 msgstr "이 명령을 그래도 저장하시겠습니까?"
 
-#: src/ui/main_window.py:997
+#: src/ui/main_window.py:1179
 msgid "Custom editor saved"
 msgstr "사용자 지정 편집기가 저장되었습니다"
 
-#: src/ui/main_window.py:1001 src/ui/main_window.py:1012
+#: src/ui/main_window.py:1183 src/ui/main_window.py:1194
 msgid "Custom editor cleared"
 msgstr "맞춤 편집기가 초기화되었습니다"
 
-#: src/ui/main_window.py:1006
+#: src/ui/main_window.py:1188
 msgid "Are you sure you want to clear the custom editor command?"
 msgstr "맞춤 편집기 명령을 삭제하시겠습니까?"
 
-#: src/ui/main_window.py:1007
+#: src/ui/main_window.py:1189
 msgid "This will revert to using the system default editor."
 msgstr "시스템 기본 편집기를 사용하도록 되돌아갑니다."
 
-#: src/ui/tracker_dialog.py:34 src/ui/tracker_dialog.py:44
+#: src/ui/tracker_dialog.py:35 src/ui/tracker_dialog.py:45
+#: test/ui/test_tracker_dialog.py:44
 msgid "Edit Tracker"
 msgstr "트래커 편집"
 
-#: src/ui/tracker_dialog.py:55
+#: src/ui/tracker_dialog.py:56
 msgid "Name:"
 msgstr "이름:"
 
-#: src/ui/tracker_dialog.py:58
+#: src/ui/tracker_dialog.py:59
 msgid "Enter tracker name"
 msgstr "트래커 이름 입력"
 
-#: src/ui/tracker_dialog.py:67
+#: src/ui/tracker_dialog.py:68
 msgid "Description:"
 msgstr "설명:"
 
-#: src/ui/tracker_dialog.py:70
+#: src/ui/tracker_dialog.py:71
 msgid "Enter tracker description"
 msgstr "트래커 설명 입력"
 
-#: src/ui/tracker_dialog.py:79
+#: src/ui/tracker_dialog.py:80
 msgid "Log Directories:"
 msgstr "로그 디렉터리:"
 
-#: src/ui/tracker_dialog.py:93
+#: src/ui/tracker_dialog.py:94
 msgid "Find Directories"
 msgstr "디렉터리 찾기"
 
-#: src/ui/tracker_dialog.py:97
+#: src/ui/tracker_dialog.py:98
 msgid "Add Directory"
 msgstr "디렉터리 추가"
 
-#: src/ui/tracker_dialog.py:101
+#: src/ui/tracker_dialog.py:102
 msgid "Remove Directory"
 msgstr "디렉터리 삭제"
 
-#: src/ui/tracker_dialog.py:115
+#: src/ui/tracker_dialog.py:149
 msgid "Save Changes"
 msgstr "변경 사항 저장"
 
-#: src/ui/tracker_dialog.py:115
+#: src/ui/tracker_dialog.py:149
 msgid "Create Tracker"
 msgstr "트래커 만들기"
 
-#: src/ui/tracker_dialog.py:127 src/ui/tracker_dialog.py:189
+#: src/ui/tracker_dialog.py:161 src/ui/tracker_dialog.py:223
 msgid "Delete Tracker"
 msgstr "트래커 삭제"
 
-#: src/ui/tracker_dialog.py:161
+#: src/ui/tracker_dialog.py:195
 msgid "Select Log Directory"
 msgstr "로그 디렉터리 선택"
 
-#: src/ui/tracker_dialog.py:190 test/ui/test_tracker_dialog.py:263
+#: src/ui/tracker_dialog.py:224 test/ui/test_tracker_dialog.py:300
 msgid "Delete the tracker \"{0}\"?"
 msgstr "트래커 \"{0}\"을(를) 삭제하시겠습니까?"
 
-#: src/ui/tracker_dialog.py:191 test/ui/test_tracker_dialog.py:264
+#: src/ui/tracker_dialog.py:225 test/ui/test_tracker_dialog.py:301
 msgid ""
 "This removes the tracker and the directories it watches from Protokoll. The "
 "log files themselves are left where they are."
 msgstr "이렇게 하면 트래커와 그가 감시하는 디렉터리가 Protokoll에서 제거됩니다. 로그 파일은 그대로 남아 있습니다."
 
-#: src/ui/tracker_dialog.py:216 src/ui/tracker_dialog.py:227
+#: src/ui/tracker_dialog.py:252 src/ui/tracker_dialog.py:263
 msgid "Validation Error"
 msgstr "유효성 검사 오류"
 
-#: src/ui/tracker_dialog.py:217
+#: src/ui/tracker_dialog.py:253
 msgid "Please enter a tracker name."
 msgstr "트래커 이름을 입력하세요."
 
-#: src/utils/file_handler.py:117
+#: src/utils/file_handler.py:123
 msgid "File does not exist"
 msgstr "파일이 존재하지 않습니다"
 
-#: src/utils/file_handler.py:142
+#: src/utils/file_handler.py:148
 msgid "Very large file ({0}); too large to search"
 msgstr "매우 큰 파일 ({0}); 검색하기엔 너무 큼"
 
-#: src/utils/file_handler.py:144
+#: src/utils/file_handler.py:150
 msgid "Large file ({0})"
 msgstr "대용량 파일 ({0})"
 
-#: src/utils/file_handler.py:162
+#: src/utils/file_handler.py:168
 msgid "Binary detection failed"
 msgstr "바이너리 감지 실패"
 
-#: src/utils/file_handler.py:165 src/utils/file_handler.py:228
-#: src/utils/file_handler.py:275 src/utils/file_handler.py:511
+#: src/utils/file_handler.py:171 src/utils/file_handler.py:242
+#: src/utils/file_handler.py:291 src/utils/file_handler.py:359
+#: src/utils/file_handler.py:658 test/unit/test_log_search.py:50
 msgid "File may contain corrupted data or non-text content"
 msgstr "파일에 손상된 데이터 또는 비텍스트 콘텐츠가 포함되어 있을 수 있습니다"
 
-#: src/utils/file_handler.py:222 src/utils/file_handler.py:271
+#: src/utils/file_handler.py:236 src/utils/file_handler.py:287
+#: src/utils/file_handler.py:355
 msgid "Not a file"
 msgstr "파일이 아닙니다"
 
-#: src/utils/file_handler.py:224 src/utils/file_handler.py:273
+#: src/utils/file_handler.py:238 src/utils/file_handler.py:289
+#: src/utils/file_handler.py:357
 msgid "Not readable"
 msgstr "읽을 수 없습니다"
 
-#: src/utils/file_handler.py:226
+#: src/utils/file_handler.py:240
 msgid "Size exceeds limit ({0})"
 msgstr "크기가 제한을 초과했습니다 ({0})"
 
-#: src/utils/file_handler.py:248 src/utils/file_handler.py:312
+#: src/utils/file_handler.py:259 src/utils/file_handler.py:332
+#: src/utils/file_handler.py:385
 msgid "Encoding error: {0}"
 msgstr "인코딩 오류: {0}"
 
-#: src/utils/file_handler.py:367 src/utils/file_handler.py:396
+#: src/utils/file_handler.py:514 src/utils/file_handler.py:543
 msgid "Empty zip archive"
 msgstr "빈 ZIP 아카이브"
 
-#: src/utils/file_handler.py:374 src/utils/file_handler.py:410
+#: src/utils/file_handler.py:521 src/utils/file_handler.py:557
 msgid "No log files in zip"
 msgstr "ZIP에 로그 파일이 없습니다"
 
-#: src/utils/file_handler.py:376 src/utils/file_handler.py:412
+#: src/utils/file_handler.py:523 src/utils/file_handler.py:559
 msgid "Unsupported compression: {0}"
 msgstr "지원되지 않는 압축: {0}"
 
-#: src/utils/file_handler.py:505
+#: src/utils/file_handler.py:652
 msgid "Path is not a file"
 msgstr "경로가 파일이 아닙니다"
 
-#: src/utils/file_handler.py:508
+#: src/utils/file_handler.py:655
 msgid "File is not readable"
 msgstr "파일을 읽을 수 없습니다"
 
-#: src/utils/file_handler.py:513
+#: src/utils/file_handler.py:660
 msgid "File is valid for viewing"
 msgstr "파일은 볼 수 있습니다"
 
@@ -560,3 +566,97 @@ msgstr "편집기를 찾을 수 없습니다: {0}"
 #: src/utils/utils.py:753
 msgid "Unexpected error opening file: {0}"
 msgstr "파일을 여는 중 예기치 않은 오류: {0}"
+
+#: src/ui/main_window.py:575
+msgid "Loading {0}..."
+msgstr "로드 중 {0}..."
+
+#: src/ui/main_window.py:964
+msgid "Searching..."
+msgstr "검색 중..."
+
+#: src/ui/main_window.py:988
+msgid "❌ Search failed: {0}"
+msgstr "❌ 검색 실패: {0}"
+
+#: src/ui/main_window.py:266
+msgid "Load earlier lines"
+msgstr "이전 줄 로드"
+
+#: src/ui/main_window.py:268
+msgid "Load the part of the file before what is shown"
+msgstr "표시된 부분보다 이전 파일 부분을 로드합니다"
+
+#: src/ui/main_window.py:724
+msgid "Use \"Load earlier lines\" above to see more."
+msgstr "위의 \"이전 줄 로드\"를 사용하면 더 많이 볼 수 있습니다."
+
+#: src/ui/main_window.py:619
+msgid ""
+"The file has changed since it was shown, so it is shown again from its end."
+msgstr "파일이 표시된 이후 변경되어 끝부분부터 다시 표시됩니다."
+
+#: src/ui/main_window.py:624
+msgid "Could not load earlier lines: {0}"
+msgstr "이전 행을 불러올 수 없습니다: {0}"
+
+#: src/utils/file_handler.py:361 src/utils/file_handler.py:365
+#: test/unit/test_file_handler.py:314
+msgid "Only a plain text file can be read from part way through."
+msgstr "중간부터 읽을 수 있는 것은 일반 텍스트 파일뿐입니다."
+
+#: src/ui/main_window.py:714
+msgid "the decrypted contents"
+msgstr "복호화된 내용"
+
+#: src/ui/main_window.py:731 test/ui/test_log_viewing.py:178
+msgid "🔒 Encrypted log, decrypted for viewing"
+msgstr "🔒 암호화된 로그, 확인을 위해 복호화"
+
+#: src/ui/main_window.py:734
+msgid "⚠️  {0} record(s) could not be decrypted and are not shown"
+msgstr "⚠️  {0} 개의 레코드를 복호화하지 못해 표시되지 않습니다"
+
+#: src/ui/tracker_dialog.py:112
+msgid "Encrypted logs"
+msgstr "암호화된 로그"
+
+#: src/ui/tracker_dialog.py:117
+msgid ""
+"Only needed if this tracker's encrypted logs do not open. Enter the service "
+"name and app ID the app writing them uses for its log key."
+msgstr ""
+"이 트래커의 암호화된 로그가 열리지 않을 경우에만 필요합니다. 로그 키에 사용되는 서비스 이름과 로그를 기록하는 앱이 사용하는 앱 ID를"
+" 입력하십시오."
+
+#: src/ui/tracker_dialog.py:123
+msgid "Service name:"
+msgstr "서비스 이름:"
+
+#: src/ui/tracker_dialog.py:132
+msgid "App ID:"
+msgstr "앱 ID:"
+
+#: src/ui/tracker_dialog.py:135
+msgid "Detected from the log file name"
+msgstr "로그 파일 이름에서 감지됨"
+
+#: src/utils/file_handler.py:429 test/unit/test_file_handler.py:476
+msgid "This file does not contain any readable encrypted log records."
+msgstr "이 파일에는 읽을 수 있는 암호화된 로그 레코드가 포함되어 있지 않습니다."
+
+#: src/utils/file_handler.py:456
+msgid ""
+"Set the service name and app ID under \"Encrypted logs\" in this tracker's "
+"settings to the ones the app writing this log uses."
+msgstr "이 트래커 설정의 \"암호화된 로그\"에서 서비스 이름과 앱 ID를 로그를 작성하는 앱이 사용하는 값으로 설정합니다."
+
+#: src/utils/file_handler.py:459 test/unit/test_file_handler.py:425
+msgid ""
+"This log is encrypted, and there is no service name and app ID to look up "
+"its key with."
+msgstr "이 로그는 암호화되어 있으며, 키를 조회할 서비스 이름 및 앱 ID가 없습니다."
+
+#: src/utils/file_handler.py:462
+msgid "This log is encrypted, and no key found for it opens it (tried: {0})."
+msgstr "이 로그는 암호화되어 있으며, 열 수 있는 키가 발견되지 않았습니다(시도한 키: {0})."
