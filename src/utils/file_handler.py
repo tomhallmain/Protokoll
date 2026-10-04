@@ -129,7 +129,7 @@ class FileHandler:
             info = {
                 "path": str(path.resolve()),
                 "size": file_size,
-                "size_human": self._format_size(file_size),
+                "size_human": self.format_size(file_size),
                 "is_file": path.is_file(),
                 "is_compressed": self.is_compressed(file_path),
                 "is_log_file": self.is_log_file(file_path),
@@ -208,7 +208,8 @@ class FileHandler:
         # Files with moderate null bytes but high printable ratio are text
         return False
     
-    def _format_size(self, size_bytes: int) -> str:
+    @staticmethod
+    def format_size(size_bytes: int) -> str:
         """Human-readable file size."""
         for unit in ['B', 'KB', 'MB', 'GB']:
             if size_bytes < 1024:
@@ -270,6 +271,8 @@ class FileHandler:
         info["is_tail"] saying whether the start of the file was left out, and
         info["shown_size_human"] how much came back. There is no size ceiling
         here: the read is bounded by max_bytes however large the file is.
+        For a plain file, info["start_offset"] is the byte offset the content
+        starts at, which read_range_safe() can read back from.
 
         A file that already fits comes back whole, so a caller can use this for
         every file and let the size decide. *file_info* is as for read_file_safe.
@@ -291,6 +294,7 @@ class FileHandler:
             if file_info.get("is_encrypted", False):
                 return self._read_encrypted_log(file_path, file_info, key_candidates, max_bytes)
 
+            start_offset = None
             if file_info["is_compressed"]:
                 # Compressed formats have no seekable end, so the stream is
                 # decompressed in full; only the tail is held.
@@ -307,21 +311,80 @@ class FileHandler:
                 with open(file_path, 'rb') as f:
                     if is_tail:
                         f.seek(-max_bytes, os.SEEK_END)
+                    start_offset = f.tell()
                     raw_content = f.read()
 
             if is_tail:
-                raw_content = self._drop_partial_first_line(raw_content)
+                trimmed = self._drop_partial_first_line(raw_content)
+                if start_offset is not None:
+                    start_offset += len(raw_content) - len(trimmed)
+                raw_content = trimmed
 
             info = dict(file_info)
             info["is_tail"] = is_tail
             info["shown_bytes"] = len(raw_content)
-            info["shown_size_human"] = self._format_size(len(raw_content))
+            info["shown_size_human"] = self.format_size(len(raw_content))
+            if start_offset is not None:
+                info["start_offset"] = start_offset
             return True, self._decode_bytes(raw_content, encoding), info
 
         except UnicodeDecodeError as e:
             return False, "", {"error": _("Encoding error: {0}").format(str(e))}
         except Exception as e:
             logger.error(f"Tail read error: {str(e)}")
+            return False, "", {"error": str(e)}
+
+    def read_range_safe(self, file_path: str, end_offset: int, max_bytes: Optional[int] = None,
+                        file_info: Optional[Dict[str, Any]] = None) -> Tuple[bool, str, Dict[str, Any]]:
+        """
+        Read up to *max_bytes* of a plain file ending at byte *end_offset*,
+        starting at a line boundary unless the read reaches the file's start.
+
+        This is the part before what read_tail_safe() (or an earlier call of
+        this) returned, given that read's info["start_offset"]. info carries
+        this read's own "start_offset" and "shown_bytes". Compressed and
+        encrypted files cannot be read from an offset and are refused.
+        """
+        max_bytes = max_bytes or self.DEFAULT_TAIL_BYTES
+        if file_info is None:
+            file_info = self.get_file_info(file_path)
+
+        if "error" in file_info:
+            return False, "", file_info
+        if not file_info["is_file"]:
+            return False, "", {"error": _("Not a file")}
+        if not file_info["readable"]:
+            return False, "", {"error": _("Not readable")}
+        if file_info.get("is_binary", False):
+            return False, "", {"error": _("File may contain corrupted data or non-text content"), "warnings": file_info["warnings"]}
+        if file_info.get("is_encrypted", False) or file_info["is_compressed"]:
+            return False, "", {"error": _("Only a plain text file can be read from part way through.")}
+
+        encoding = self._detect_encoding(file_info.get("sample", b""))
+        if not self._is_tail_safe_encoding(encoding):
+            return False, "", {"error": _("Only a plain text file can be read from part way through.")}
+
+        try:
+            start_offset = max(0, end_offset - max_bytes)
+            with open(file_path, 'rb') as f:
+                f.seek(start_offset)
+                raw_content = f.read(end_offset - start_offset)
+
+            if start_offset > 0:
+                trimmed = self._drop_partial_first_line(raw_content)
+                start_offset += len(raw_content) - len(trimmed)
+                raw_content = trimmed
+
+            info = dict(file_info)
+            info["start_offset"] = start_offset
+            info["shown_bytes"] = len(raw_content)
+            info["shown_size_human"] = self.format_size(len(raw_content))
+            return True, self._decode_bytes(raw_content, encoding), info
+
+        except UnicodeDecodeError as e:
+            return False, "", {"error": _("Encoding error: {0}").format(str(e))}
+        except Exception as e:
+            logger.error(f"Range read error: {str(e)}")
             return False, "", {"error": str(e)}
 
     def _read_encrypted_log(self, file_path: str, file_info: Dict[str, Any],
@@ -369,7 +432,7 @@ class FileHandler:
         info = dict(file_info)
         info["is_tail"] = is_tail
         info["shown_bytes"] = len(raw_content)
-        info["shown_size_human"] = self._format_size(len(raw_content))
+        info["shown_size_human"] = self.format_size(len(raw_content))
         info["skipped_records"] = skipped
         if skipped:
             logger.warning(f"{file_path}: {skipped} record(s) did not decrypt and were skipped")

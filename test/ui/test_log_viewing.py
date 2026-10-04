@@ -6,6 +6,7 @@ that loads a selected file's content into the log viewer.
 import re
 
 import pytest
+from PyQt6.QtCore import QPoint
 
 from src.internal.tracker import Tracker
 from src.utils.file_handler import FileHandler
@@ -291,3 +292,203 @@ def test_viewing_a_file_inspects_it_once(qtbot, window, tmp_path, monkeypatch):
     _display(qtbot, window, str(log_file))
 
     assert inspections == [str(log_file)]
+
+
+def _numbered_lines(count):
+    return b"".join(b"line %05d\n" % i for i in range(count))
+
+
+def _load_earlier(qtbot, window):
+    with qtbot.waitSignal(window.log_displayed, timeout=LOAD_TIMEOUT_MS):
+        window.load_earlier_lines()
+
+
+def test_load_earlier_lines_is_offered_only_for_a_partly_shown_plain_file(qtbot, window, tmp_path):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    large = log_dir / "large.log"
+    large.write_bytes(_numbered_lines(2000))
+    small = log_dir / "small.log"
+    small.write_bytes(b"line one\n")
+    window.config_manager.set("log_viewer.max_load_bytes", 2048)
+
+    _display(qtbot, window, str(large))
+    assert not window.load_earlier_btn.isHidden()
+
+    _display(qtbot, window, str(small))
+    assert window.load_earlier_btn.isHidden()
+
+
+def test_load_earlier_lines_prepends_the_preceding_lines(qtbot, window, tmp_path):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log_file = log_dir / "app.log"
+    log_file.write_bytes(_numbered_lines(2000))
+    window.config_manager.set("log_viewer.max_load_bytes", 2048)
+    _display(qtbot, window, str(log_file))
+    _assert_not_in("line 01700", window.log_viewer.toPlainText())
+
+    _load_earlier(qtbot, window)
+
+    result = window.log_viewer.toPlainText()
+    _assert_in("line 01700", result)
+    _assert_in("line 01999", result)
+    _assert_not_in("line 01500", result)
+    # Contiguous: the line before the old start is followed by the old start.
+    _assert_in("line 01795\nline 01796", result)
+
+
+def test_load_earlier_lines_until_the_start_of_the_file(qtbot, window, tmp_path):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log_file = log_dir / "app.log"
+    log_file.write_bytes(_numbered_lines(2000))
+    window.config_manager.set("log_viewer.max_load_bytes", 2048)
+    _display(qtbot, window, str(log_file))
+
+    for _attempt in range(20):
+        if window.load_earlier_btn.isHidden():
+            break
+        _load_earlier(qtbot, window)
+
+    result = window.log_viewer.toPlainText()
+    assert window.load_earlier_btn.isHidden()
+    _assert_in("line 00000", result)
+    _assert_in("line 01999", result)
+    _assert_not_in(_msg_start(_TAIL_NOTICE), result)
+    assert result.count("line 01000") == 1
+
+
+def test_load_earlier_lines_starts_over_when_the_file_was_replaced(qtbot, window, tmp_path):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log_file = log_dir / "app.log"
+    log_file.write_bytes(_numbered_lines(2000))
+    window.config_manager.set("log_viewer.max_load_bytes", 2048)
+    _display(qtbot, window, str(log_file))
+    log_file.write_bytes(b"".join(b"rotated %05d\n" % i for i in range(500)))
+
+    with qtbot.waitSignal(window.log_displayed, timeout=LOAD_TIMEOUT_MS):
+        window.load_earlier_lines()
+    _wait_for_all_workers(qtbot, window)
+
+    result = window.log_viewer.toPlainText()
+    _assert_in("rotated 00499", result)
+    _assert_not_in("line 01999", result)
+
+
+def _first_shown_line(file_path, max_bytes):
+    """The line a tail view of *file_path* starts at, read the way the viewer reads it."""
+    _success, content, _info = FileHandler().read_tail_safe(str(file_path), max_bytes)
+    return content.splitlines()[0]
+
+
+def _line_before(numbered_line):
+    """"line 01814" -> "line 01813"."""
+    return "line %05d" % (int(numbered_line.split()[1]) - 1)
+
+
+def _large_plain_log(tmp_path, window, line_count=2000):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log_file = log_dir / "app.log"
+    log_file.write_bytes(_numbered_lines(line_count))
+    window.config_manager.set("log_viewer.max_load_bytes", 2048)
+    return log_file
+
+
+def test_load_earlier_lines_scrolls_to_where_the_previous_view_began(qtbot, window, tmp_path):
+    log_file = _large_plain_log(tmp_path, window)
+    old_first = _first_shown_line(log_file, 2048)
+    with qtbot.waitExposed(window):
+        window.show()
+    _display(qtbot, window, str(log_file))
+
+    _load_earlier(qtbot, window)
+
+    # A few pixels in, so the document margin is not what gets hit. One line of
+    # slack either way of the boundary: the point is that the reader is left at
+    # the join, not at the top or bottom of everything now loaded.
+    top_line = window.log_viewer.cursorForPosition(QPoint(5, 5)).block().text()
+    assert top_line in (old_first, _line_before(old_first))
+
+
+def test_load_earlier_lines_joins_up_on_a_log_that_has_grown(qtbot, window, tmp_path):
+    """Appending to a log does not move the bytes already shown, so the offsets
+    the view keeps still point at the right place."""
+    log_file = _large_plain_log(tmp_path, window)
+    old_first = _first_shown_line(log_file, 2048)
+    _display(qtbot, window, str(log_file))
+    with open(log_file, "ab") as f:
+        f.write(b"".join(b"line %05d\n" % i for i in range(2000, 2100)))
+
+    _load_earlier(qtbot, window)
+
+    result = window.log_viewer.toPlainText()
+    _assert_in(f"{_line_before(old_first)}\n{old_first}", result)
+    _assert_in("line 01999", result)
+
+
+def test_a_failed_earlier_read_leaves_the_view_as_it_was(qtbot, window, tmp_path, monkeypatch):
+    log_file = _large_plain_log(tmp_path, window)
+    _display(qtbot, window, str(log_file))
+    before = window.log_viewer.toPlainText()
+    monkeypatch.setattr(FileHandler, "read_range_safe",
+                        lambda self, *args, **kwargs: (False, "", {"error": "disk on fire"}))
+
+    _load_earlier(qtbot, window)
+
+    assert window.log_viewer.toPlainText() == before
+    assert not window.load_earlier_btn.isHidden()  # still offered, so it can be retried
+
+
+def test_an_earlier_read_superseded_by_another_file_is_dropped(qtbot, window, tmp_path):
+    log_file = _large_plain_log(tmp_path, window)
+    other = log_file.parent / "other.log"
+    other.write_bytes(b"content of the other file\n")
+    _display(qtbot, window, str(log_file))
+
+    with qtbot.waitSignal(window.log_displayed, timeout=LOAD_TIMEOUT_MS,
+                          check_params_cb=lambda path: path == str(other)):
+        window.load_earlier_lines()
+        window.display_log_file(str(other))
+    _wait_for_all_workers(qtbot, window)
+
+    result = window.log_viewer.toPlainText()
+    _assert_in("content of the other file", result)
+    _assert_not_in("line 01", result)
+    assert window.load_earlier_btn.isHidden()
+
+
+def test_load_earlier_lines_is_withdrawn_for_search_results_and_back_after(qtbot, window, tmp_path):
+    log_file = _large_plain_log(tmp_path, window)
+    _select_tracker_for(window, log_file.parent)
+    with qtbot.waitSignal(window.log_displayed, timeout=LOAD_TIMEOUT_MS):
+        window.update_log_files_list()
+    assert not window.load_earlier_btn.isHidden()
+
+    window.search_edit.setText("line 01999")
+    with qtbot.waitSignal(window.search_finished, timeout=LOAD_TIMEOUT_MS):
+        window.search_logs()
+    assert window.load_earlier_btn.isHidden()
+
+    with qtbot.waitSignal(window.log_displayed, timeout=LOAD_TIMEOUT_MS):
+        window.clear_search_and_reload()
+    assert not window.load_earlier_btn.isHidden()
+
+
+def test_load_earlier_lines_is_not_offered_for_an_encrypted_log(
+        qtbot, window, tmp_path, write_encrypted_log):
+    """Encrypted records cannot be found from an offset, so only the tail is offered."""
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    encrypted_file = write_encrypted_log(
+        log_dir / "app_2026-09-30.log.enc",
+        ["INFO record %05d" % i for i in range(500)], app_identifier="app")
+    _select_tracker_for(window, log_dir)
+    window.config_manager.set("log_viewer.max_load_bytes", 2048)
+
+    _display(qtbot, window, str(encrypted_file))
+
+    _assert_in(_msg_start(_TAIL_NOTICE), window.log_viewer.toPlainText())
+    assert window.load_earlier_btn.isHidden()

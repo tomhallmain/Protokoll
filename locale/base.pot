@@ -559,3 +559,27 @@ msgstr ""
 #: src/ui/main_window.py:887
 msgid "❌ Search failed: {0}"
 msgstr ""
+
+#: src/ui/main_window.py:266
+msgid "Load earlier lines"
+msgstr ""
+
+#: src/ui/main_window.py:268
+msgid "Load the part of the file before what is shown"
+msgstr ""
+
+#: src/ui/main_window.py:724
+msgid "Use \"Load earlier lines\" above to see more."
+msgstr ""
+
+#: src/ui/main_window.py:619
+msgid "The file has changed since it was shown, so it is shown again from its end."
+msgstr ""
+
+#: src/ui/main_window.py:624
+msgid "Could not load earlier lines: {0}"
+msgstr ""
+
+#: src/utils/file_handler.py:361
+msgid "Only a plain text file can be read from part way through."
+msgstr ""

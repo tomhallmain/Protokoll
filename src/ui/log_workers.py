@@ -80,6 +80,37 @@ class LogLoadThread(_LogWorker):
         self.loaded.emit(self.generation, result)
 
 
+class LogRangeLoadThread(_LogWorker):
+    """Read the part of a plain log file before what is already shown."""
+    loaded = pyqtSignal(int, object)  # generation, LoadResult
+
+    def __init__(self, generation: int, file_path: str, end_offset: int, max_bytes: int,
+                 loaded_size: int):
+        super().__init__(generation)
+        self.file_path = file_path
+        self.end_offset = end_offset
+        self.max_bytes = max_bytes
+        # The file's size when what is shown was read. A smaller file now has
+        # been truncated or replaced, so the shown offsets no longer apply to it.
+        self.loaded_size = loaded_size
+
+    def run(self):
+        file_handler = FileHandler()
+        try:
+            is_valid, reason, file_info = file_handler.validate_file_for_viewing(self.file_path)
+            result = LoadResult(self.file_path, is_valid, reason, file_info)
+            if is_valid and file_info["size"] < self.loaded_size:
+                result.read_info = {"file_changed": True}
+            elif is_valid:
+                result.success, result.content, result.read_info = file_handler.read_range_safe(
+                    self.file_path, self.end_offset, self.max_bytes, file_info=file_info)
+        except Exception as e:
+            logger.error(f"Loading earlier lines of {self.file_path} failed: {e}", exc_info=True)
+            result = LoadResult(self.file_path, True, "", {}, success=False,
+                                read_info={"error": str(e)})
+        self.loaded.emit(self.generation, result)
+
+
 class LogSearchThread(_LogWorker):
     """Search a set of log files; the file list is gathered on this thread too."""
     searched = pyqtSignal(int, object)  # generation, log_search.SearchOutcome

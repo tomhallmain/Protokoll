@@ -12,11 +12,12 @@ from PyQt6.QtGui import QFont, QPalette, QColor, QFontMetrics, QTextCursor
 from ..internal import log_content, log_entries, log_search
 from ..internal.tracker import Tracker
 from ..utils.config_manager import ConfigManager
+from ..utils.file_handler import FileHandler
 from ..utils.theme_manager import ThemeManager
 from ..utils.logging_setup import get_logger
 from ..utils.translations import _
 from ..utils.utils import Utils
-from .log_workers import LogLoadThread, LogSearchThread
+from .log_workers import LoadResult, LogLoadThread, LogRangeLoadThread, LogSearchThread
 from .toast import show_toast
 from .tracker_dialog import DELETE_REQUESTED, TrackerDialog
 
@@ -35,6 +36,10 @@ class MainWindow(QMainWindow):
         # a worker's result is shown only if no request has been made since.
         self._generation = 0
         self._workers = []
+        # The plain-file view "Load earlier lines" extends (a LoadResult whose
+        # read_info has a start_offset past 0), else None.
+        self._shown = None
+        self._earlier_base = None
 
         try:
             self.config_manager = ConfigManager()
@@ -257,7 +262,15 @@ class MainWindow(QMainWindow):
         self.log_viewer.setReadOnly(True)
         self.setup_log_viewer()
         
+        # Offered only while a plain file's view starts part way through it.
+        self.load_earlier_btn = QPushButton(_("Load earlier lines"))
+        self.load_earlier_btn.setObjectName("loadEarlierButton")
+        self.load_earlier_btn.setToolTip(_("Load the part of the file before what is shown"))
+        self.load_earlier_btn.clicked.connect(self.load_earlier_lines)
+        self.load_earlier_btn.hide()
+
         right_layout.addLayout(search_layout)
+        right_layout.addWidget(self.load_earlier_btn)
         right_layout.addWidget(self.log_viewer)
         
         # Add panels to main layout with adjusted proportions
@@ -532,6 +545,8 @@ class MainWindow(QMainWindow):
         self._generation += 1
         for worker in self._workers:
             worker.cancel()
+        self._shown = None
+        self.load_earlier_btn.hide()
         return self._generation
 
     def _is_current(self, generation):
@@ -572,10 +587,85 @@ class MainWindow(QMainWindow):
         if not self._is_current(generation):
             return
         if self._render_log_file(generation, result):
+            self._remember_shown(result)
             self.log_displayed.emit(result.file_path)
 
-    def _render_log_file(self, generation, result):
-        """Show a LoadResult. Returns False if a newer request took over mid-render."""
+    def _remember_shown(self, result):
+        """Offer "Load earlier lines" if *result* is a plain file shown from part way through."""
+        if result.is_valid and result.success and result.read_info.get("start_offset", 0) > 0:
+            self._shown = result
+            self.load_earlier_btn.show()
+
+    def load_earlier_lines(self):
+        """Read the part of the shown file before what is on screen, and show both."""
+        shown = self._shown
+        if shown is None:
+            return
+        generation = self._begin_viewer_update()
+        self._earlier_base = shown
+        worker = LogRangeLoadThread(
+            generation, shown.file_path, shown.read_info["start_offset"],
+            self.config_manager.get(ConfigManager.MAX_LOAD_BYTES), shown.file_info["size"])
+        worker.loaded.connect(self._on_earlier_loaded)
+        self._start_worker(worker)
+
+    def _on_earlier_loaded(self, generation, earlier):
+        self._take_result(generation)
+        if not self._is_current(generation):
+            return
+        shown = self._earlier_base
+
+        if not earlier.is_valid or earlier.read_info.get("file_changed"):
+            show_toast(self, _("The file has changed since it was shown, so it is shown again from its end."))
+            self.display_log_file(shown.file_path)
+            return
+        if not earlier.success:
+            # What is on screen is still right; only the extension failed.
+            show_toast(self, _("Could not load earlier lines: {0}").format(
+                earlier.read_info.get("error", _("Unknown error"))))
+            self._remember_shown(shown)
+            self.log_displayed.emit(shown.file_path)
+            return
+
+        start_offset = earlier.read_info["start_offset"]
+        shown_bytes = shown.read_info["shown_bytes"] + earlier.read_info["shown_bytes"]
+        read_info = dict(shown.read_info, start_offset=start_offset, is_tail=start_offset > 0,
+                         shown_bytes=shown_bytes,
+                         shown_size_human=FileHandler.format_size(shown_bytes))
+        combined = LoadResult(shown.file_path, True, "", shown.file_info, success=True,
+                              content=earlier.content + shown.content, read_info=read_info)
+        if self._render_log_file(generation, combined, boundary=len(earlier.content)):
+            self._remember_shown(combined)
+            self.log_displayed.emit(shown.file_path)
+
+    @staticmethod
+    def _split_at(content, boundary):
+        """*content* as one part, or as the parts before and after *boundary*.
+
+        The earlier part loses the line break it ends with: each part is
+        appended as its own paragraph, which already separates them.
+        """
+        if not boundary or boundary >= len(content):
+            return [content]
+        earlier = content[:boundary]
+        if earlier.endswith("\n"):
+            earlier = earlier[:-1]
+        return [earlier, content[boundary:]]
+
+    def _scroll_to_position(self, position):
+        """Scroll so the line at document *position* is at the top of the viewer."""
+        cursor = self.log_viewer.textCursor()
+        cursor.setPosition(min(position, self.log_viewer.document().characterCount() - 1))
+        vbar = self.log_viewer.verticalScrollBar()
+        vbar.setValue(vbar.value() + self.log_viewer.cursorRect(cursor).top())
+
+    def _render_log_file(self, generation, result, boundary=None):
+        """Show a LoadResult. Returns False if a newer request took over mid-render.
+
+        With *boundary* (an index into the content), the view is scrolled to
+        that point afterwards: where the previously shown part begins, after
+        earlier lines have been loaded in front of it.
+        """
         file_path = result.file_path
         file_info = result.file_info
         self.log_viewer.clear()
@@ -629,6 +719,10 @@ class MainWindow(QMainWindow):
                   "open the file in an editor to see them.").format(
                       read_info["shown_size_human"], of_what),
                 color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
+            if read_info.get("start_offset", 0) > 0:
+                self.append_styled_content(
+                    _("Use \"Load earlier lines\" above to see more."),
+                    color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
 
         if file_info.get("is_compressed", False):
             self.append_styled_content(_("📦 Compressed file detected"), color=ThemeManager.DARK_THEME["log_viewer"]["info"])
@@ -651,19 +745,26 @@ class MainWindow(QMainWindow):
         header_had_unknown_lines = file_info.get("total_lines") is None
 
         strategy = log_content.choose_render_strategy(content)
-        if strategy == log_content.RENDER_CHUNKED:
-            if not self._load_large_file_chunked(content, generation):
-                return False
-        elif strategy == log_content.RENDER_LONG_LINE:
+        boundary_position = None
+        if strategy == log_content.RENDER_LONG_LINE:
             self._load_single_long_line(content)
         else:
-            self.log_viewer.append(ThemeManager.convert_ansi_to_html(content))
+            for index, part in enumerate(self._split_at(content, boundary)):
+                if index == 1:
+                    boundary_position = self.log_viewer.document().characterCount()
+                if strategy == log_content.RENDER_CHUNKED:
+                    if not self._load_large_file_chunked(part, generation):
+                        return False
+                else:
+                    self.log_viewer.append(ThemeManager.convert_ansi_to_html(part))
 
         self.log_viewer.append("\n")
 
         if header_had_unknown_lines:
             self._update_header_line_count(
                 line_count, file_path, file_info["size_human"], updated_today_note, lines_label)
+        if boundary_position is not None:
+            self._scroll_to_position(boundary_position)
         return True
 
     def _update_header_line_count(self, line_count: int, file_path: str = None, size_human: str = None, updated_today_note: str = "", lines_label: str = None) -> None:

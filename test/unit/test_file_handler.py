@@ -233,6 +233,87 @@ def test_read_tail_safe_keeps_content_with_no_line_break(tmp_path, handler):
     assert len(content) == 1024
 
 
+def test_read_tail_safe_reports_where_a_plain_tail_starts(tmp_path, handler):
+    data = _numbered_lines(2000)
+    log_file = tmp_path / "app.log"
+    log_file.write_bytes(data)
+
+    _success, content, info = handler.read_tail_safe(str(log_file), max_bytes=2048)
+
+    assert info["start_offset"] > 0
+    assert data[info["start_offset"]:] == content.encode("ascii")
+
+
+def test_read_tail_safe_gives_no_start_offset_for_a_compressed_file(tmp_path, handler):
+    gz_file = tmp_path / "app.log.gz"
+    with gzip.open(gz_file, "wt", encoding="utf-8", newline="") as f:
+        f.write(_numbered_lines(2000).decode("ascii"))
+
+    _success, _content, info = handler.read_tail_safe(str(gz_file), max_bytes=2048)
+
+    assert "start_offset" not in info
+
+
+def test_read_range_safe_reads_the_lines_just_before_a_tail(tmp_path, handler):
+    data = _numbered_lines(2000)
+    log_file = tmp_path / "app.log"
+    log_file.write_bytes(data)
+    _success, _tail, tail_info = handler.read_tail_safe(str(log_file), max_bytes=2048)
+    end = tail_info["start_offset"]
+
+    success, content, info = handler.read_range_safe(str(log_file), end, max_bytes=2048)
+
+    assert success is True
+    assert 0 < info["start_offset"] < end
+    assert data[info["start_offset"]:end] == content.encode("ascii")
+    assert all(line.startswith("line ") for line in content.splitlines())
+    assert info["shown_bytes"] <= 2048
+
+
+def test_read_range_safe_reaching_the_start_reads_from_byte_zero(tmp_path, handler):
+    data = _numbered_lines(2000)
+    log_file = tmp_path / "app.log"
+    log_file.write_bytes(data)
+
+    success, content, info = handler.read_range_safe(str(log_file), 25, max_bytes=2048)
+
+    assert success is True
+    assert info["start_offset"] == 0
+    assert content.encode("ascii") == data[:25]
+
+
+def test_read_range_safe_joins_up_across_a_line_longer_than_the_window(tmp_path, handler):
+    """A window with no line break to cut at is kept whole, so successive reads
+    still cover the file without a gap or an overlap."""
+    data = b"x" * 5000 + b"\nend\n"
+    log_file = tmp_path / "app.log"
+    log_file.write_bytes(data)
+    _success, tail, info = handler.read_tail_safe(str(log_file), max_bytes=1024)
+    assert tail == "end\n"
+
+    pieces = [tail]
+    end = info["start_offset"]
+    while end > 0:
+        success, content, info = handler.read_range_safe(str(log_file), end, max_bytes=1024)
+        assert success is True
+        assert data[info["start_offset"]:end] == content.encode("ascii")
+        pieces.insert(0, content)
+        end = info["start_offset"]
+
+    assert "".join(pieces).encode("ascii") == data
+
+
+def test_read_range_safe_refuses_a_compressed_file(tmp_path, handler):
+    gz_file = tmp_path / "app.log.gz"
+    with gzip.open(gz_file, "wt", encoding="utf-8", newline="") as f:
+        f.write(_numbered_lines(2000).decode("ascii"))
+
+    success, _content, info = handler.read_range_safe(str(gz_file), 100, max_bytes=2048)
+
+    assert success is False
+    assert info["error"] == _("Only a plain text file can be read from part way through.")
+
+
 def test_read_tail_safe_reads_the_end_of_a_compressed_file(tmp_path, handler):
     gz_file = tmp_path / "app.log.gz"
     with gzip.open(gz_file, "wt", encoding="utf-8", newline="") as f:
