@@ -42,9 +42,9 @@ class Tracker:
         # entry rather than leaving the tracker filed under both names.
         self._stored_name: Optional[str] = None
 
-    def save_metadata(self) -> None:
-        """Save tracker metadata to the encrypted cache"""
-        metadata = {
+    def to_metadata(self) -> Dict[str, Any]:
+        """The fields stored in the encrypted cache for this tracker."""
+        return {
             "name": self.name,
             "description": self.description,
             "created_at": self.created_at.isoformat(),
@@ -52,9 +52,21 @@ class Tracker:
             "log_encryption_service": self.log_encryption_service,
             "log_encryption_app_id": self.log_encryption_app_id,
         }
-        
+
+    @classmethod
+    def from_metadata(cls, metadata: Dict[str, Any], config_manager: ConfigManager) -> 'Tracker':
+        """A tracker from to_metadata()'s fields; ones added since a record was stored default to empty."""
+        tracker = cls(metadata["name"], metadata["description"], config_manager)
+        tracker.created_at = datetime.fromisoformat(metadata["created_at"])
+        tracker.log_directories = set(metadata.get("log_directories", []))
+        tracker.log_encryption_service = metadata.get("log_encryption_service", "")
+        tracker.log_encryption_app_id = metadata.get("log_encryption_app_id", "")
+        return tracker
+
+    def save_metadata(self) -> None:
+        """Save tracker metadata to the encrypted cache"""
         self.config_manager.save_tracker_metadata(
-            self.name, metadata, previous_name=self._stored_name)
+            self.name, self.to_metadata(), previous_name=self._stored_name)
         self._stored_name = self.name
     
     def add_log_directory(self, directory: str) -> bool:
@@ -190,11 +202,7 @@ class Tracker:
             return None
         
         try:
-            tracker = cls(metadata["name"], metadata["description"], config_manager)
-            tracker.created_at = datetime.fromisoformat(metadata["created_at"])
-            tracker.log_directories = set(metadata.get("log_directories", []))
-            tracker.log_encryption_service = metadata.get("log_encryption_service", "")
-            tracker.log_encryption_app_id = metadata.get("log_encryption_app_id", "")
+            tracker = cls.from_metadata(metadata, config_manager)
             tracker._stored_name = name
             return tracker
         except Exception as e:

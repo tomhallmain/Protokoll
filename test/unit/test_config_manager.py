@@ -13,7 +13,9 @@ import pytest
 
 import src.utils.app_info_cache as app_info_cache_module
 from src.utils.app_info_cache import AppInfoCache
+from src.internal.log_entries import DEFAULT_MAX_ENTRY_LINES
 from src.utils.config_manager import ConfigManager
+from src.utils.file_handler import FileHandler
 
 pytestmark = pytest.mark.unit
 
@@ -56,6 +58,31 @@ def test_get_set_dotted_keys(config_manager):
     config_manager.set("window.width", 1280)
     assert config_manager.get("window.width") == 1280
     assert config_manager.get("window.missing", "default") == "default"
+
+
+def test_get_without_default_falls_back_to_default_config(config_manager):
+    assert config_manager.get(ConfigManager.SEARCH_MAX_ENTRY_LINES) == DEFAULT_MAX_ENTRY_LINES
+    assert config_manager.get(ConfigManager.MAX_LOAD_BYTES) == FileHandler.DEFAULT_TAIL_BYTES
+    assert config_manager.get("no.such.key") is None
+
+
+def test_partial_saved_section_keeps_the_other_defaults(tmp_path):
+    config_dir = tmp_path / ".protokoll"
+    config_dir.mkdir(parents=True)
+    (config_dir / "config.json").write_text(
+        json.dumps({"search": {"use_regex": True}}), encoding="utf-8")
+
+    manager = ConfigManager()
+
+    assert manager.get(ConfigManager.SEARCH_USE_REGEX) is True
+    assert manager.get(ConfigManager.SEARCH_SHOW_LINE_NUMBERS) is True
+    assert manager.get(ConfigManager.SEARCH_MAX_ENTRY_LINES) == DEFAULT_MAX_ENTRY_LINES
+
+
+def test_set_does_not_change_the_defaults(config_manager):
+    config_manager.set(ConfigManager.SEARCH_USE_REGEX, True)
+
+    assert config_manager.default_config["search"]["use_regex"] is False
 
 
 def test_add_recent_tracker_caps_at_ten(config_manager):

@@ -1,13 +1,18 @@
+import copy
 import json
 import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ..internal.log_entries import DEFAULT_MAX_ENTRY_LINES
 from ..utils.app_info_cache import AppInfoCache
 from ..utils.encryptor import KEY_STORE_DIR_ENV_VAR
+from ..utils.file_handler import FileHandler
 from ..utils.logging_setup import get_logger
 
 logger = get_logger('utils.config_manager')
+
+_MISSING = object()
 
 class ConfigManager:
     """Settings for the app, split across two files.
@@ -23,11 +28,29 @@ class ConfigManager:
     Tracker edits are the exception and store immediately.
     """
 
+    RECENT_TRACKERS = "recent_trackers"
+    LAST_TRACKER = "last_tracker"
     #: Keys held in the encrypted cache rather than config.json.
-    CACHE_KEYS = frozenset({"recent_trackers", "last_tracker"})
+    CACHE_KEYS = frozenset({RECENT_TRACKERS, LAST_TRACKER})
     LAST_LOG_FILE_PREFIX = "last_log_file_"
     CACHE_KEY_PREFIXES = (LAST_LOG_FILE_PREFIX,)
     CUSTOM_LOG_DIRS_KEY = "custom_log_directories"
+
+    # Keys held in config.json.
+    WINDOW_WIDTH = "window.width"
+    WINDOW_HEIGHT = "window.height"
+    WINDOW_X = "window.x"
+    WINDOW_Y = "window.y"
+    CUSTOM_EDITOR_COMMAND = "custom_editor_command"
+    MAX_LOAD_BYTES = "log_viewer.max_load_bytes"
+    SEARCH_SHOW_LINE_NUMBERS = "search.show_line_numbers"
+    SEARCH_USE_REGEX = "search.use_regex"
+    SEARCH_LIMIT_TO_LINE_START = "search.limit_to_line_start"
+    SEARCH_ALL_FILES = "search.all_files"
+    SEARCH_CONTEXT_BEFORE = "search.context_before"
+    SEARCH_CONTEXT_AFTER = "search.context_after"
+    SEARCH_MULTILINE_ENTRIES = "search.multiline_entries"
+    SEARCH_MAX_ENTRY_LINES = "search.max_entry_lines"
 
     LEGACY_TRACKERS_DIRNAME = "trackers"
     LEGACY_CUSTOM_LOG_DIRS_FILENAME = "custom_log_dirs.json"
@@ -44,7 +67,8 @@ class ConfigManager:
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # Default configuration
+        # The default for every config.json setting. get() falls back to these,
+        # so callers don't pass their own.
         self.default_config = {
             "window": {
                 "width": 1024,
@@ -52,15 +76,11 @@ class ConfigManager:
                 "x": None,
                 "y": None
             },
-            "theme": "light",
             "log_viewer": {
-                "font_size": 12,
-                "font_family": "Consolas",
-                "line_wrap": True,
                 # How much of a log file's end the viewer loads. Everything
                 # before it stays on disk, so opening a huge file costs the same
                 # as opening a small one.
-                "max_load_bytes": 2 * 1024 * 1024
+                "max_load_bytes": FileHandler.DEFAULT_TAIL_BYTES
             },
             "search": {
                 "show_line_numbers": True,
@@ -70,7 +90,7 @@ class ConfigManager:
                 "context_before": 0,
                 "context_after": 0,
                 "multiline_entries": True,
-                "max_entry_lines": 200
+                "max_entry_lines": DEFAULT_MAX_ENTRY_LINES
             }
         }
 
@@ -83,13 +103,25 @@ class ConfigManager:
         if self.config_file.exists():
             try:
                 with open(self.config_file, 'r', encoding='utf-8') as f:
-                    config = json.load(f)
-                    # Merge with default config to ensure all keys exist
-                    return {**self.default_config, **config}
+                    return self._merge_with_defaults(json.load(f))
             except Exception as e:
                 logger.error(f"Error loading config: {e}")
-                return self.default_config.copy()
-        return self.default_config.copy()
+        return copy.deepcopy(self.default_config)
+
+    def _merge_with_defaults(self, loaded: Dict[str, Any]) -> Dict[str, Any]:
+        """Defaults overlaid with *loaded*, section by section.
+
+        A saved section keeps the defaults it lacks, so a setting added after the
+        file was written still has its default. The result shares no dicts with
+        default_config, which set() would otherwise modify.
+        """
+        merged = copy.deepcopy(self.default_config)
+        for key, value in loaded.items():
+            if isinstance(merged.get(key), dict) and isinstance(value, dict):
+                merged[key].update(value)
+            else:
+                merged[key] = value
+        return merged
 
     def save_config(self) -> None:
         """Save current configuration to file"""
@@ -103,18 +135,31 @@ class ConfigManager:
     def _is_cache_key(cls, key: str) -> bool:
         return key in cls.CACHE_KEYS or key.startswith(cls.CACHE_KEY_PREFIXES)
 
-    def get(self, key: str, default: Any = None) -> Any:
-        """Get configuration value"""
-        if self._is_cache_key(key):
-            return self.app_info_cache.get(key, default)
+    def get(self, key: str, default: Any = _MISSING) -> Any:
+        """Get configuration value.
 
-        keys = key.split('.')
-        value = self.config
-        for k in keys:
-            if isinstance(value, dict):
-                value = value.get(k, default)
-            else:
-                return default
+        Without *default*, a config.json key missing from the file falls back to
+        default_config, and to None if it has no default there either.
+        """
+        if self._is_cache_key(key):
+            return self.app_info_cache.get(key, None if default is _MISSING else default)
+
+        value = self._lookup(self.config, key)
+        if value is not _MISSING:
+            return value
+        if default is not _MISSING:
+            return default
+        value = self._lookup(self.default_config, key)
+        return None if value is _MISSING else value
+
+    @staticmethod
+    def _lookup(tree: Dict[str, Any], key: str) -> Any:
+        """The value at dotted *key* in *tree*, or _MISSING."""
+        value = tree
+        for k in key.split('.'):
+            if not isinstance(value, dict) or k not in value:
+                return _MISSING
+            value = value[k]
         return value
 
     def set(self, key: str, value: Any) -> None:
@@ -141,12 +186,12 @@ class ConfigManager:
 
     def add_recent_tracker(self, tracker_name: str) -> None:
         """Add a tracker to recent trackers list"""
-        recent = self.get('recent_trackers', [])
+        recent = self.get(self.RECENT_TRACKERS, [])
         if tracker_name in recent:
             recent.remove(tracker_name)
         recent.insert(0, tracker_name)
         recent = recent[:10]  # Keep only 10 most recent
-        self.set('recent_trackers', recent)
+        self.set(self.RECENT_TRACKERS, recent)
 
     # ------------------------------------------------------------------
     # Tracker metadata
@@ -181,12 +226,12 @@ class ConfigManager:
         self.app_info_cache.remove_tracker(name)
         self.app_info_cache.remove(self.last_log_file_key(name))
 
-        recent = self.app_info_cache.get('recent_trackers', [])
+        recent = self.app_info_cache.get(self.RECENT_TRACKERS, [])
         if name in recent:
             self.app_info_cache.set(
-                'recent_trackers', [tracker for tracker in recent if tracker != name])
-        if self.app_info_cache.get('last_tracker') == name:
-            self.app_info_cache.remove('last_tracker')
+                self.RECENT_TRACKERS, [tracker for tracker in recent if tracker != name])
+        if self.app_info_cache.get(self.LAST_TRACKER) == name:
+            self.app_info_cache.remove(self.LAST_TRACKER)
 
         self.app_info_cache.store()
 

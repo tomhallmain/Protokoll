@@ -254,6 +254,18 @@ def test_a_tracker_saved_before_log_encryption_loads_with_none_set(config_manage
     assert loaded.log_encryption_app_id == ""
 
 
+def test_every_metadata_field_survives_a_save_and_load(tmp_path, config_manager):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    tracker = Tracker("my-app", "desc", config_manager)
+    tracker.set_log_encryption("SomeService", "some_app")
+    tracker.set_log_directories([str(log_dir)])
+
+    loaded = Tracker.load("my-app", config_manager)
+
+    assert loaded.to_metadata() == tracker.to_metadata()
+
+
 def test_key_candidates_guess_the_app_id_from_the_file_then_the_tracker_name(config_manager):
     tracker = Tracker("SD Runner", config_manager=config_manager)
 

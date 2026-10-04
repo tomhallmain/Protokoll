@@ -143,7 +143,7 @@ class MainWindow(QMainWindow):
         self.show_line_numbers = QToolButton()
         self.show_line_numbers.setObjectName("showLineNumbers")
         self.show_line_numbers.setCheckable(True)
-        self.show_line_numbers.setChecked(self.config_manager.get("search.show_line_numbers", True))
+        self.show_line_numbers.setChecked(self.config_manager.get(ConfigManager.SEARCH_SHOW_LINE_NUMBERS))
         self.show_line_numbers.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_FileDialogListView))
         self.show_line_numbers.setToolTip(_("Show line numbers"))
         self.show_line_numbers.toggled.connect(self._save_search_settings)
@@ -151,7 +151,7 @@ class MainWindow(QMainWindow):
         self.use_regex = QToolButton()
         self.use_regex.setObjectName("useRegex")
         self.use_regex.setCheckable(True)
-        self.use_regex.setChecked(self.config_manager.get("search.use_regex", False))
+        self.use_regex.setChecked(self.config_manager.get(ConfigManager.SEARCH_USE_REGEX))
         self.use_regex.setText(".*")
         self.use_regex.setToolTip(_("Use regular expression"))
         self.use_regex.toggled.connect(self._save_search_settings)
@@ -159,7 +159,7 @@ class MainWindow(QMainWindow):
         self.limit_to_line_start = QToolButton()
         self.limit_to_line_start.setObjectName("limitToLineStart")
         self.limit_to_line_start.setCheckable(True)
-        self.limit_to_line_start.setChecked(self.config_manager.get("search.limit_to_line_start", False))
+        self.limit_to_line_start.setChecked(self.config_manager.get(ConfigManager.SEARCH_LIMIT_TO_LINE_START))
         self.limit_to_line_start.setText("^")
         self.limit_to_line_start.setToolTip(_("Match only at start of log line (after level: INFO, ERROR, WARNING, DEBUG, TRACE)"))
         self.limit_to_line_start.toggled.connect(self._save_search_settings)
@@ -167,7 +167,7 @@ class MainWindow(QMainWindow):
         self.search_all_files = QToolButton()
         self.search_all_files.setObjectName("searchAllFiles")
         self.search_all_files.setCheckable(True)
-        self.search_all_files.setChecked(self.config_manager.get("search.all_files", False))
+        self.search_all_files.setChecked(self.config_manager.get(ConfigManager.SEARCH_ALL_FILES))
         self.search_all_files.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_DirIcon))
         self.search_all_files.setToolTip(_("Search all log files in the tracker (not just the selected file)"))
         self.search_all_files.toggled.connect(self._save_search_settings)
@@ -175,7 +175,7 @@ class MainWindow(QMainWindow):
         self.multiline_entries = QToolButton()
         self.multiline_entries.setObjectName("multilineEntries")
         self.multiline_entries.setCheckable(True)
-        self.multiline_entries.setChecked(self.config_manager.get("search.multiline_entries", True))
+        self.multiline_entries.setChecked(self.config_manager.get(ConfigManager.SEARCH_MULTILINE_ENTRIES))
         self.multiline_entries.setText("¶")
         self.multiline_entries.setToolTip(
             _("Group multi-line logger calls (tracebacks, formatted messages) into single entries"))
@@ -184,7 +184,7 @@ class MainWindow(QMainWindow):
         self.context_before = QSpinBox()
         self.context_before.setObjectName("contextBefore")
         self.context_before.setRange(0, 50)
-        self.context_before.setValue(self.config_manager.get("search.context_before", 0))
+        self.context_before.setValue(self.config_manager.get(ConfigManager.SEARCH_CONTEXT_BEFORE))
         self.context_before.setPrefix(_("B:"))
         self.context_before.setToolTip(_("Entries of context to show before each match"))
         self.context_before.valueChanged.connect(self._save_search_settings)
@@ -192,7 +192,7 @@ class MainWindow(QMainWindow):
         self.context_after = QSpinBox()
         self.context_after.setObjectName("contextAfter")
         self.context_after.setRange(0, 50)
-        self.context_after.setValue(self.config_manager.get("search.context_after", 0))
+        self.context_after.setValue(self.config_manager.get(ConfigManager.SEARCH_CONTEXT_AFTER))
         self.context_after.setPrefix(_("A:"))
         self.context_after.setToolTip(_("Entries of context to show after each match"))
         self.context_after.valueChanged.connect(self._save_search_settings)
@@ -236,7 +236,7 @@ class MainWindow(QMainWindow):
         custom_action.triggered.connect(self.configure_custom_editor)
         
         # Show current custom editor if configured
-        custom_editor = self.config_manager.get('custom_editor_command')
+        custom_editor = self.config_manager.get(ConfigManager.CUSTOM_EDITOR_COMMAND)
         if custom_editor:
             editor_menu.addSeparator()
             current_action = editor_menu.addAction(_("Current: {0}").format(custom_editor))
@@ -274,7 +274,7 @@ class MainWindow(QMainWindow):
         tab_width = metrics.horizontalAdvance("    ")  # 4 spaces
         self.log_viewer.setTabStopDistance(tab_width)
         
-        # Enable line wrapping
+        # No line wrapping: long lines scroll horizontally
         self.log_viewer.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         
         # Set background and text colors
@@ -288,10 +288,10 @@ class MainWindow(QMainWindow):
     
     def load_window_state(self):
         """Load window state from configuration"""
-        width = self.config_manager.get('window.width', 1024)
-        height = self.config_manager.get('window.height', 768)
-        x = self.config_manager.get('window.x')
-        y = self.config_manager.get('window.y')
+        width = self.config_manager.get(ConfigManager.WINDOW_WIDTH)
+        height = self.config_manager.get(ConfigManager.WINDOW_HEIGHT)
+        x = self.config_manager.get(ConfigManager.WINDOW_X)
+        y = self.config_manager.get(ConfigManager.WINDOW_Y)
         
         self.resize(width, height)
         if x is not None and y is not None:
@@ -299,20 +299,20 @@ class MainWindow(QMainWindow):
     
     def save_window_state(self):
         """Save window state to configuration"""
-        self.config_manager.set('window.width', self.width())
-        self.config_manager.set('window.height', self.height())
-        self.config_manager.set('window.x', self.x())
-        self.config_manager.set('window.y', self.y())
+        self.config_manager.set(ConfigManager.WINDOW_WIDTH, self.width())
+        self.config_manager.set(ConfigManager.WINDOW_HEIGHT, self.height())
+        self.config_manager.set(ConfigManager.WINDOW_X, self.x())
+        self.config_manager.set(ConfigManager.WINDOW_Y, self.y())
 
     def _save_search_settings(self, _checked=None):
         """Persist search toggle states to config (called when any search toggle changes)."""
-        self.config_manager.set("search.show_line_numbers", self.show_line_numbers.isChecked())
-        self.config_manager.set("search.use_regex", self.use_regex.isChecked())
-        self.config_manager.set("search.limit_to_line_start", self.limit_to_line_start.isChecked())
-        self.config_manager.set("search.all_files", self.search_all_files.isChecked())
-        self.config_manager.set("search.multiline_entries", self.multiline_entries.isChecked())
-        self.config_manager.set("search.context_before", self.context_before.value())
-        self.config_manager.set("search.context_after", self.context_after.value())
+        self.config_manager.set(ConfigManager.SEARCH_SHOW_LINE_NUMBERS, self.show_line_numbers.isChecked())
+        self.config_manager.set(ConfigManager.SEARCH_USE_REGEX, self.use_regex.isChecked())
+        self.config_manager.set(ConfigManager.SEARCH_LIMIT_TO_LINE_START, self.limit_to_line_start.isChecked())
+        self.config_manager.set(ConfigManager.SEARCH_ALL_FILES, self.search_all_files.isChecked())
+        self.config_manager.set(ConfigManager.SEARCH_MULTILINE_ENTRIES, self.multiline_entries.isChecked())
+        self.config_manager.set(ConfigManager.SEARCH_CONTEXT_BEFORE, self.context_before.value())
+        self.config_manager.set(ConfigManager.SEARCH_CONTEXT_AFTER, self.context_after.value())
     
     def load_trackers(self):
         """Load and display all available trackers"""
@@ -321,7 +321,7 @@ class MainWindow(QMainWindow):
             self.tracker_list.addItem(tracker.name)
         
         # Select last used tracker if available
-        last_tracker = self.config_manager.get('last_tracker')
+        last_tracker = self.config_manager.get(ConfigManager.LAST_TRACKER)
         if last_tracker:
             items = self.tracker_list.findItems(last_tracker, Qt.MatchFlag.MatchExactly)
             if items:
@@ -367,7 +367,7 @@ class MainWindow(QMainWindow):
         self.current_tracker = Tracker.load(tracker_name, self.config_manager)
         if self.current_tracker:
             logger.debug(f"Tracker loaded with directories: {self.current_tracker.get_log_directories()}")
-        self.config_manager.set('last_tracker', tracker_name)
+        self.config_manager.set(ConfigManager.LAST_TRACKER, tracker_name)
         self.update_log_files_list()
     
     def update_log_files_list(self):
@@ -526,8 +526,7 @@ class MainWindow(QMainWindow):
         
         # Read before the header is written: how much of the file is actually
         # being shown belongs in it.
-        max_load_bytes = self.config_manager.get(
-            "log_viewer.max_load_bytes", FileHandler.DEFAULT_TAIL_BYTES)
+        max_load_bytes = self.config_manager.get(ConfigManager.MAX_LOAD_BYTES)
         success, content, read_info = self.file_handler.read_tail_safe(
             file_path, max_load_bytes, key_candidates=self._log_key_candidates(file_path))
 
@@ -689,8 +688,7 @@ class MainWindow(QMainWindow):
             multiline=self.multiline_entries.isChecked(),
             context_before=self.context_before.value(),
             context_after=self.context_after.value(),
-            max_entry_lines=self.config_manager.get(
-                "search.max_entry_lines", log_entries.DEFAULT_MAX_ENTRY_LINES),
+            max_entry_lines=self.config_manager.get(ConfigManager.SEARCH_MAX_ENTRY_LINES),
         )
 
     def _find_matches_in_file(self, log_file_path, search_re, search_text_lower):
@@ -944,7 +942,7 @@ class MainWindow(QMainWindow):
             return
 
         # Get custom editor command from config if available
-        custom_editor = self.config_manager.get('custom_editor_command')
+        custom_editor = self.config_manager.get(ConfigManager.CUSTOM_EDITOR_COMMAND)
 
         Utils.open_file_with_editor(log_file_path, custom_editor, self.handle_error)
         show_toast(self, _("Opening in editor"))
@@ -972,7 +970,7 @@ class MainWindow(QMainWindow):
 
     def configure_custom_editor(self):
         """Show dialog to configure custom editor command"""
-        current_command = self.config_manager.get('custom_editor_command', '')
+        current_command = self.config_manager.get(ConfigManager.CUSTOM_EDITOR_COMMAND, '')
         
         command, ok = QLineEdit.getText(
             self, 
@@ -1001,11 +999,11 @@ class MainWindow(QMainWindow):
                 if reply == QMessageBox.StandardButton.No:
                     return
             
-            self.config_manager.set('custom_editor_command', command.strip())
+            self.config_manager.set(ConfigManager.CUSTOM_EDITOR_COMMAND, command.strip())
             show_toast(self, _("Custom editor saved"))
         elif ok and not command.strip():
             # User cleared the command
-            self.config_manager.set('custom_editor_command', '')
+            self.config_manager.set(ConfigManager.CUSTOM_EDITOR_COMMAND, '')
             show_toast(self, _("Custom editor cleared"))
 
     def clear_custom_editor(self):
@@ -1016,7 +1014,7 @@ class MainWindow(QMainWindow):
                                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         
         if reply == QMessageBox.StandardButton.Yes:
-            self.config_manager.set('custom_editor_command', '')
+            self.config_manager.set(ConfigManager.CUSTOM_EDITOR_COMMAND, '')
             show_toast(self, _("Custom editor cleared"))
 
     def closeEvent(self, event):
