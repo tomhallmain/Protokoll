@@ -548,3 +548,14 @@ msgstr ""
 msgid "Unexpected error opening file: {0}"
 msgstr ""
 
+#: src/ui/main_window.py:560
+msgid "Loading {0}..."
+msgstr ""
+
+#: src/ui/main_window.py:863
+msgid "Searching..."
+msgstr ""
+
+#: src/ui/main_window.py:887
+msgid "❌ Search failed: {0}"
+msgstr ""

@@ -29,6 +29,16 @@ def _msg_start(msgid):
     return _(msgid).split("{0}")[0]
 
 
+#: Generous: the search runs on a worker thread, and a loaded CI machine can be slow.
+SEARCH_TIMEOUT_MS = 10_000
+
+
+def _search(qtbot, window):
+    """Run the search and wait for its result to reach the viewer."""
+    with qtbot.waitSignal(window.search_finished, timeout=SEARCH_TIMEOUT_MS):
+        window.search_logs()
+
+
 def _select_tracker_with_log_file(window, tmp_path, content, filename="app.log"):
     log_dir = tmp_path / "logs"
     log_dir.mkdir()
@@ -55,7 +65,7 @@ def test_plain_text_search_finds_matching_line(qtbot, window, tmp_path):
     )
 
     window.search_edit.setText("error")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     assert "ERROR something broke" in result_text
@@ -68,7 +78,8 @@ def test_search_via_return_key(qtbot, window, tmp_path):
     _select_tracker_with_log_file(window, tmp_path, "alpha\nbeta\ngamma\n")
 
     qtbot.keyClicks(window.search_edit, "beta")
-    qtbot.keyClick(window.search_edit, Qt.Key.Key_Return)
+    with qtbot.waitSignal(window.search_finished, timeout=SEARCH_TIMEOUT_MS):
+        qtbot.keyClick(window.search_edit, Qt.Key.Key_Return)
 
     result_text = window.log_viewer.toPlainText()
     assert "beta" in result_text
@@ -85,7 +96,7 @@ def test_regex_search(qtbot, window, tmp_path):
 
     window.use_regex.setChecked(True)
     window.search_edit.setText(r"code (4|5)\d\d")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     assert "404" in result_text
@@ -106,7 +117,7 @@ def test_context_lines_pulls_in_surrounding_lines(qtbot, window, tmp_path):
     window.context_before.setValue(1)
     window.context_after.setValue(1)
     window.search_edit.setText("error")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     assert "line 2" in result_text
@@ -128,7 +139,7 @@ def test_context_lines_zero_matches_legacy_behavior(qtbot, window, tmp_path):
     )
 
     window.search_edit.setText("error")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     assert "ERROR line 3" in result_text
@@ -140,7 +151,7 @@ def test_no_matches_shows_message(qtbot, window, tmp_path):
     _select_tracker_with_log_file(window, tmp_path, "nothing interesting here\n")
 
     window.search_edit.setText("nonexistent-term")
-    window.search_logs()
+    _search(qtbot, window)
 
     assert _msg_start("No matches found for '{0}' ({1}, {2})") in window.log_viewer.toPlainText()
 
@@ -157,7 +168,7 @@ def test_search_all_files_reports_matches_across_files(qtbot, window, tmp_path):
     window.search_all_files.setChecked(True)
 
     window.search_edit.setText("error")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     assert "a.log" in result_text
@@ -190,7 +201,7 @@ def test_context_lines_merges_overlapping_windows_into_one_block(qtbot, window, 
     window.context_before.setValue(1)
     window.context_after.setValue(1)
     window.search_edit.setText("error")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     rendered_lines = result_text.split("\n")
@@ -223,7 +234,7 @@ def test_context_lines_separates_non_adjacent_blocks(qtbot, window, tmp_path):
     window.context_before.setValue(1)
     window.context_after.setValue(1)
     window.search_edit.setText("error")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     rendered_lines = result_text.split("\n")
@@ -253,7 +264,7 @@ def test_context_before_clipped_at_file_start(qtbot, window, tmp_path):
     window.context_before.setValue(3)
     window.context_after.setValue(0)
     window.search_edit.setText("error")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     assert "ERROR first line" in result_text
@@ -275,7 +286,7 @@ def test_context_after_clipped_at_file_end(qtbot, window, tmp_path):
     window.context_before.setValue(0)
     window.context_after.setValue(5)
     window.search_edit.setText("error")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     assert "ERROR last line" in result_text
@@ -306,7 +317,7 @@ def test_search_all_files_applies_context_lines_per_file(qtbot, window, tmp_path
     window.context_after.setValue(1)
 
     window.search_edit.setText("error")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     assert "before a" in result_text
@@ -328,7 +339,7 @@ def test_limit_to_line_start_matches_only_after_log_level_prefix(qtbot, window, 
 
     window.limit_to_line_start.setChecked(True)
     window.search_edit.setText("database")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     assert "database connection lost" in result_text
@@ -342,7 +353,7 @@ def test_limit_to_line_start_disabled_matches_anywhere_in_line(qtbot, window, tm
 
     window.limit_to_line_start.setChecked(False)
     window.search_edit.setText("database")
-    window.search_logs()
+    _search(qtbot, window)
 
     assert "something failed in database" in window.log_viewer.toPlainText()
 
@@ -359,7 +370,7 @@ def test_line_numbers_render_inline_with_content(qtbot, window, tmp_path):
 
     window.show_line_numbers.setChecked(True)
     window.search_edit.setText("error")
-    window.search_logs()
+    _search(qtbot, window)
 
     rendered_lines = window.log_viewer.toPlainText().split("\n")
     matching_lines = [line for line in rendered_lines if "ERROR second" in line]
@@ -384,7 +395,7 @@ def test_match_inside_traceback_returns_whole_entry(qtbot, window, tmp_path):
     _select_tracker_with_log_file(window, tmp_path, TRACEBACK_LOG)
 
     window.search_edit.setText("ConnectionError")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     assert "ERROR Failed to connect" in result_text
@@ -400,7 +411,7 @@ def test_multiline_entry_counts_as_a_single_match(qtbot, window, tmp_path):
     _select_tracker_with_log_file(window, tmp_path, TRACEBACK_LOG)
 
     window.search_edit.setText("connect")
-    window.search_logs()
+    _search(qtbot, window)
 
     assert _("File: {0} Found {1} matches").format("app.log", 1) in window.log_viewer.toPlainText()
 
@@ -411,7 +422,7 @@ def test_multiline_disabled_returns_only_the_matching_line(qtbot, window, tmp_pa
 
     window.multiline_entries.setChecked(False)
     window.search_edit.setText("ConnectionError")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     assert "ConnectionError: refused" in result_text
@@ -427,7 +438,7 @@ def test_context_counts_entries_not_physical_lines(qtbot, window, tmp_path):
     window.context_before.setValue(1)
     window.context_after.setValue(1)
     window.search_edit.setText("ConnectionError")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     assert "Starting up" in result_text
@@ -441,7 +452,7 @@ def test_long_entry_is_truncated_at_max_entry_lines(qtbot, window, tmp_path):
     window.config_manager.set("search.max_entry_lines", 3)
 
     window.search_edit.setText("boom")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     assert "ERROR boom" in result_text
@@ -467,7 +478,7 @@ def test_search_all_files_includes_encrypted_logs(qtbot, window, tmp_path, write
     window.search_all_files.setChecked(True)
 
     window.search_edit.setText("error")
-    window.search_logs()
+    _search(qtbot, window)
 
     result_text = window.log_viewer.toPlainText()
     assert "ERROR from the encrypted log" in result_text

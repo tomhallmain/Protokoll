@@ -217,10 +217,16 @@ class FileHandler:
         return f"{size_bytes:.1f}TB"
     
     def read_file_safe(self, file_path: str, max_size: Optional[int] = None,
-                       key_candidates: Sequence[Tuple[str, str]] = ()) -> Tuple[bool, str, Dict[str, Any]]:
-        """Safe file reading with compression and encrypted-log support."""
+                       key_candidates: Sequence[Tuple[str, str]] = (),
+                       file_info: Optional[Dict[str, Any]] = None) -> Tuple[bool, str, Dict[str, Any]]:
+        """Safe file reading with compression and encrypted-log support.
+
+        *file_info* is get_file_info()'s result for this file, when the caller
+        already has it; it is computed here otherwise.
+        """
         max_size = max_size or self.MAX_FILE_SIZE
-        file_info = self.get_file_info(file_path)
+        if file_info is None:
+            file_info = self.get_file_info(file_path)
         
         # Error handling
         if "error" in file_info:
@@ -255,7 +261,8 @@ class FileHandler:
             return False, "", {"error": str(e)}
 
     def read_tail_safe(self, file_path: str, max_bytes: Optional[int] = None,
-                       key_candidates: Sequence[Tuple[str, str]] = ()) -> Tuple[bool, str, Dict[str, Any]]:
+                       key_candidates: Sequence[Tuple[str, str]] = (),
+                       file_info: Optional[Dict[str, Any]] = None) -> Tuple[bool, str, Dict[str, Any]]:
         """
         Read the end of a file, up to *max_bytes*, starting at a line boundary.
 
@@ -265,10 +272,11 @@ class FileHandler:
         here: the read is bounded by max_bytes however large the file is.
 
         A file that already fits comes back whole, so a caller can use this for
-        every file and let the size decide.
+        every file and let the size decide. *file_info* is as for read_file_safe.
         """
         max_bytes = max_bytes or self.DEFAULT_TAIL_BYTES
-        file_info = self.get_file_info(file_path)
+        if file_info is None:
+            file_info = self.get_file_info(file_path)
 
         if "error" in file_info:
             return False, "", file_info
@@ -295,7 +303,7 @@ class FileHandler:
                     logger.info(
                         f"{file_path} is {encoding}, which has no unambiguous line "
                         f"boundary in bytes; reading it whole")
-                    return self.read_file_safe(file_path)
+                    return self.read_file_safe(file_path, file_info=file_info)
                 with open(file_path, 'rb') as f:
                     if is_tail:
                         f.seek(-max_bytes, os.SEEK_END)

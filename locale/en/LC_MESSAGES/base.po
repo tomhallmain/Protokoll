@@ -572,3 +572,15 @@ msgstr "Editor not found: {0}"
 #: src/utils/utils.py:753
 msgid "Unexpected error opening file: {0}"
 msgstr "Unexpected error opening file: {0}"
+
+#: src/ui/main_window.py:560
+msgid "Loading {0}..."
+msgstr "Loading {0}..."
+
+#: src/ui/main_window.py:863
+msgid "Searching..."
+msgstr "Searching..."
+
+#: src/ui/main_window.py:887
+msgid "❌ Search failed: {0}"
+msgstr "❌ Search failed: {0}"

@@ -6,26 +6,36 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                             QPushButton, QLabel, QLineEdit, QTextEdit,
                             QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QFrame, QMenu,
                             QToolButton, QStyle, QSpinBox)
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import Qt, QSize, pyqtSignal
 from PyQt6.QtGui import QFont, QPalette, QColor, QFontMetrics, QTextCursor
 
-from ..internal import log_content, log_entries
+from ..internal import log_content, log_entries, log_search
 from ..internal.tracker import Tracker
 from ..utils.config_manager import ConfigManager
 from ..utils.theme_manager import ThemeManager
 from ..utils.logging_setup import get_logger
 from ..utils.translations import _
-from ..utils.file_handler import FileHandler
 from ..utils.utils import Utils
+from .log_workers import LogLoadThread, LogSearchThread
 from .toast import show_toast
 from .tracker_dialog import DELETE_REQUESTED, TrackerDialog
 
 logger = get_logger('ui.main_window')
 
 class MainWindow(QMainWindow):
+    #: A log file's content (or the reason it can't be shown) is on screen.
+    log_displayed = pyqtSignal(str)
+    #: A search request has finished and its outcome is on screen.
+    search_finished = pyqtSignal()
+
     def __init__(self):
         super().__init__()
-        
+
+        # Every request that writes to the log viewer takes a new generation;
+        # a worker's result is shown only if no request has been made since.
+        self._generation = 0
+        self._workers = []
+
         try:
             self.config_manager = ConfigManager()
         except Exception as e:
@@ -33,13 +43,7 @@ class MainWindow(QMainWindow):
             raise
         
         self.current_tracker = None
-        
-        try:
-            self.file_handler = FileHandler()
-        except Exception as e:
-            logger.error(f"MainWindow.__init__: Failed to create FileHandler: {str(e)}")
-            raise
-        
+
         self.setWindowTitle("Protokoll")
         
         try:
@@ -359,6 +363,7 @@ class MainWindow(QMainWindow):
         if current is None:
             self.current_tracker = None
             self.files_list.clear()
+            self._begin_viewer_update()
             self.log_viewer.clear()
             return
         
@@ -372,6 +377,7 @@ class MainWindow(QMainWindow):
     
     def update_log_files_list(self):
         """Update the list of log files for the current tracker"""
+        self._begin_viewer_update()
         self.files_list.clear()
         if not self.current_tracker:
             logger.debug("No current tracker, clearing file list")
@@ -494,8 +500,13 @@ class MainWindow(QMainWindow):
                 "\n" + _("... (truncated, original length: {0} characters)").format(f"{original_length:,}"),
                 color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
 
-    def _load_large_file_chunked(self, content):
-        """Handle a large multi-line file by loading in chunks"""
+    def _load_large_file_chunked(self, content, generation):
+        """Handle a large multi-line file by loading in chunks.
+
+        Returns False if a newer request took over the viewer part way through:
+        processEvents() can run its slot, which clears the viewer, so this stops
+        rather than appending the rest of the old file after it.
+        """
         # No in-document progress indicator here (deliberately): an earlier version tried
         # to insert one and then update/remove it in place via cursor manipulation, which
         # got corrupted by or never found again past the file-info header this method is
@@ -508,32 +519,80 @@ class MainWindow(QMainWindow):
             # Process events every few chunks to keep UI responsive
             if i % 2 == 0:
                 QApplication.processEvents()
+                if not self._is_current(generation):
+                    return False
+        return True
+
+    # ------------------------------------------------------------------
+    # Background work for the log viewer
+    # ------------------------------------------------------------------
+
+    def _begin_viewer_update(self):
+        """Start a new request for the log viewer, making every earlier one stale."""
+        self._generation += 1
+        for worker in self._workers:
+            worker.cancel()
+        return self._generation
+
+    def _is_current(self, generation):
+        return generation == self._generation
+
+    def _start_worker(self, worker):
+        # A worker is released only once it has stopped and its result has been
+        # delivered; releasing it earlier would destroy a running QThread.
+        self._workers = [w for w in self._workers
+                         if not (w.isFinished() and w.delivered)]
+        self._workers.append(worker)
+        worker.start()
+
+    def _take_result(self, generation):
+        """Mark the worker for *generation* as delivered, and return it."""
+        for worker in self._workers:
+            if worker.generation == generation:
+                worker.delivered = True
+                return worker
+        return None
 
     def display_log_file(self, file_path):
-        """Display the selected log file"""
+        """Display the selected log file; the reading happens on a worker thread."""
+        generation = self._begin_viewer_update()
         self.log_viewer.clear()
-        
-        # Validate file before attempting to read
-        is_valid, reason, file_info = self.file_handler.validate_file_for_viewing(file_path)
-        
-        if not is_valid:
-            self.append_styled_content(_("⚠️  Cannot display file: {0}").format(reason), color=ThemeManager.DARK_THEME["log_viewer"]["error"])
+        self.append_styled_content(_("Loading {0}...").format(os.path.basename(file_path)),
+                                   color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+
+        worker = LogLoadThread(
+            generation, file_path,
+            self.config_manager.get(ConfigManager.MAX_LOAD_BYTES),
+            self._log_key_candidates(file_path))
+        worker.loaded.connect(self._on_log_loaded)
+        self._start_worker(worker)
+
+    def _on_log_loaded(self, generation, result):
+        self._take_result(generation)
+        if not self._is_current(generation):
+            return
+        if self._render_log_file(generation, result):
+            self.log_displayed.emit(result.file_path)
+
+    def _render_log_file(self, generation, result):
+        """Show a LoadResult. Returns False if a newer request took over mid-render."""
+        file_path = result.file_path
+        file_info = result.file_info
+        self.log_viewer.clear()
+
+        if not result.is_valid:
+            self.append_styled_content(_("⚠️  Cannot display file: {0}").format(result.reason), color=ThemeManager.DARK_THEME["log_viewer"]["error"])
             if "warnings" in file_info and file_info["warnings"]:
                 for warning in file_info["warnings"]:
                     self.append_styled_content(f"  • {warning}", color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
             self.log_viewer.append("\n")
-            return
-        
-        # Read before the header is written: how much of the file is actually
-        # being shown belongs in it.
-        max_load_bytes = self.config_manager.get(ConfigManager.MAX_LOAD_BYTES)
-        success, content, read_info = self.file_handler.read_tail_safe(
-            file_path, max_load_bytes, key_candidates=self._log_key_candidates(file_path))
+            return True
 
-        if not success:
+        content, read_info = result.content, result.read_info
+        if not result.success:
             self.append_styled_content(_("❌ Error reading file: {0}").format(read_info.get("error", _("Unknown error"))), color=ThemeManager.DARK_THEME["log_viewer"]["error"])
             self.log_viewer.append("\n")
-            return
+            return True
 
         is_tail = read_info.get("is_tail", False)
         lines_label = _("Lines shown") if is_tail else _("Lines")
@@ -570,7 +629,7 @@ class MainWindow(QMainWindow):
                   "open the file in an editor to see them.").format(
                       read_info["shown_size_human"], of_what),
                 color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
-        
+
         if file_info.get("is_compressed", False):
             self.append_styled_content(_("📦 Compressed file detected"), color=ThemeManager.DARK_THEME["log_viewer"]["info"])
 
@@ -585,7 +644,7 @@ class MainWindow(QMainWindow):
         if file_info.get("warnings"):
             for warning in file_info["warnings"]:
                 self.append_styled_content(f"⚠️  {warning}", color=ThemeManager.DARK_THEME["log_viewer"]["warning"])
-        
+
         self.log_viewer.append("\n")
 
         line_count = log_content.count_lines(content)
@@ -593,7 +652,8 @@ class MainWindow(QMainWindow):
 
         strategy = log_content.choose_render_strategy(content)
         if strategy == log_content.RENDER_CHUNKED:
-            self._load_large_file_chunked(content)
+            if not self._load_large_file_chunked(content, generation):
+                return False
         elif strategy == log_content.RENDER_LONG_LINE:
             self._load_single_long_line(content)
         else:
@@ -604,6 +664,7 @@ class MainWindow(QMainWindow):
         if header_had_unknown_lines:
             self._update_header_line_count(
                 line_count, file_path, file_info["size_human"], updated_today_note, lines_label)
+        return True
 
     def _update_header_line_count(self, line_count: int, file_path: str = None, size_human: str = None, updated_today_note: str = "", lines_label: str = None) -> None:
         """Replace 'Lines: Unknown' in the header with the actual line count, then append the same header at the end."""
@@ -645,30 +706,23 @@ class MainWindow(QMainWindow):
     def refresh_current_log(self):
         """Refresh the currently viewed log file and update the log files list."""
         logger.debug("Refreshing current log file and log files list")
-        
+
         # Save the currently selected file path before refreshing
         selected_file_path = self.get_current_log_file_path()
-        
-        # Refresh the log files list to pick up any new files
-        if self.current_tracker:
-            self.update_log_files_list()
-        
-        # Reload the previously selected file (or the newly selected one if it still exists)
-        if selected_file_path:
-            # Try to find the file in the updated list
+
+        if not self.current_tracker:
+            if selected_file_path:
+                self.display_log_file(selected_file_path)
+            return
+
+        # Rebuilding the list reselects the last viewed file, and selecting a
+        # file loads it, so the file is not loaded again here.
+        self.update_log_files_list()
+        if selected_file_path and self.get_current_log_file_path() != selected_file_path:
             for i in range(self.files_list.count()):
-                item = self.files_list.item(i)
-                if item.data(Qt.ItemDataRole.UserRole) == selected_file_path:
-                    # File still exists, select it and reload
+                if self.files_list.item(i).data(Qt.ItemDataRole.UserRole) == selected_file_path:
                     self.files_list.setCurrentRow(i)
-                    self.display_log_file(selected_file_path)
                     return
-            
-            # File no longer exists, but we still have a selection from update_log_files_list
-            # The on_log_file_selected will be called automatically
-        elif self.files_list.count() > 0:
-            # No previous selection, but we have files - select the first one
-            self.files_list.setCurrentRow(0)
 
     def _prepare_search_pattern(self, search_text):
         """Return (search_re, search_text_lower, error_message)."""
@@ -679,10 +733,13 @@ class MainWindow(QMainWindow):
                 return None, None, _("Invalid regular expression: {0}").format(search_text)
         return None, search_text.lower(), None
 
-    def _find_matches_in_content(self, content, search_re, search_text_lower):
-        """Read the current search toggles and hand the content to the search core."""
-        return log_entries.find_matches(
-            content, search_re, search_text_lower,
+    def _matcher(self, search_re, search_text_lower):
+        """content -> match blocks, with the search toggles as they are now.
+
+        The toggles are read here, on the GUI thread, because the returned
+        function runs on a worker.
+        """
+        options = dict(
             use_regex=self.use_regex.isChecked(),
             limit_to_line_start=self.limit_to_line_start.isChecked(),
             multiline=self.multiline_entries.isChecked(),
@@ -691,15 +748,9 @@ class MainWindow(QMainWindow):
             max_entry_lines=self.config_manager.get(ConfigManager.SEARCH_MAX_ENTRY_LINES),
         )
 
-    def _find_matches_in_file(self, log_file_path, search_re, search_text_lower):
-        is_valid, reason, _file_info = self.file_handler.validate_file_for_viewing(log_file_path)
-        if not is_valid:
-            return None, ("validation", reason)
-        success, content, read_info = self.file_handler.read_file_safe(
-            log_file_path, key_candidates=self._log_key_candidates(log_file_path))
-        if not success:
-            return None, ("read", read_info.get("error", _("Unknown error")))
-        return self._find_matches_in_content(content, search_re, search_text_lower), None
+        def find_matches(content):
+            return log_entries.find_matches(content, search_re, search_text_lower, **options)
+        return find_matches
 
     def _display_search_blocks(self, blocks):
         """Render match blocks, with a separator between non-adjacent blocks."""
@@ -737,6 +788,19 @@ class MainWindow(QMainWindow):
         self.log_viewer.append("\n")
         self._display_search_blocks(blocks)
 
+    def _display_skipped_files(self, skipped_files):
+        if not skipped_files:
+            return
+        self.append_styled_content(
+            _("Skipped {0} file(s):").format(len(skipped_files)),
+            color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
+        )
+        for file_path, _kind, reason in skipped_files:
+            self.append_styled_content(
+                "  • {0}: {1}".format(os.path.basename(file_path), reason),
+                color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
+            )
+
     def _display_all_files_search_results(self, file_results, skipped_files, search_text, files_searched):
         total_matches = sum(log_entries.count_matches(blocks) for _, blocks in file_results)
         files_with_matches = len(file_results)
@@ -746,16 +810,7 @@ class MainWindow(QMainWindow):
                 total_matches, files_with_matches, files_searched),
             color=ThemeManager.DARK_THEME["log_viewer"]["info"],
         )
-        if skipped_files:
-            self.append_styled_content(
-                _("Skipped {0} file(s):").format(len(skipped_files)),
-                color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
-            )
-            for file_path, reason in skipped_files:
-                self.append_styled_content(
-                    "  • {0}: {1}".format(os.path.basename(file_path), reason),
-                    color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
-                )
+        self._display_skipped_files(skipped_files)
         self.log_viewer.append("\n")
         for file_path, blocks in file_results:
             self.append_styled_content(
@@ -768,83 +823,100 @@ class MainWindow(QMainWindow):
             self.log_viewer.append("")
 
     def search_logs(self):
-        """Search through the current log file or all tracker log files."""
+        """Search the current log file or all tracker log files, on a worker thread."""
+        generation = self._begin_viewer_update()
         if not self.current_tracker:
+            self.search_finished.emit()
             return
-        
+
         search_text = self.search_edit.text().strip()
         # If search is empty, reload the full log file
         if not search_text:
             log_file_path = self.get_current_log_file_path()
             if log_file_path:
                 self.display_log_file(log_file_path)
+            self.search_finished.emit()
             return
 
         search_re, search_text_lower, error_message = self._prepare_search_pattern(search_text)
         if error_message:
             self.log_viewer.clear()
             self.append_styled_content(error_message, color=ThemeManager.DARK_THEME["log_viewer"]["error"])
+            self.search_finished.emit()
             return
 
-        if self.search_all_files.isChecked():
-            log_files = self.current_tracker.get_log_files()
-            if not log_files:
-                self.log_viewer.clear()
-                self.append_styled_content(
-                    _("No log files found in the tracked directories."),
-                    color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
-                )
+        tracker = self.current_tracker
+        all_files = self.search_all_files.isChecked()
+        if all_files:
+            def list_file_paths():
+                return [log_file["path"] for log_file in tracker.get_log_files()]
+        else:
+            log_file_path = self.get_current_log_file_path()
+            if not log_file_path:
+                self.search_finished.emit()
                 return
 
-            file_results = []
-            skipped_files = []
-            for log_file in log_files:
-                log_file_path = log_file["path"]
-                matches, error = self._find_matches_in_file(
-                    log_file_path, search_re, search_text_lower
-                )
-                if error:
-                    _error_kind, reason = error
-                    skipped_files.append((log_file_path, reason))
-                    continue
-                if matches:
-                    file_results.append((log_file_path, matches))
+            def list_file_paths():
+                return [log_file_path]
 
-            if file_results:
-                self._display_all_files_search_results(
-                    file_results, skipped_files, search_text, len(log_files)
-                )
-            else:
-                self.log_viewer.clear()
-                mode, scope = self._search_scope_description()
-                self.append_styled_content(
-                    _("No matches found for '{0}' across {1} file(s) ({2}, {3})").format(
-                        search_text, len(log_files), mode, scope),
-                    color=ThemeManager.DARK_THEME["log_viewer"]["error"],
-                )
-                if skipped_files:
-                    self.append_styled_content(
-                        _("Skipped {0} file(s):").format(len(skipped_files)),
-                        color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
-                    )
-                    for file_path, reason in skipped_files:
-                        self.append_styled_content(
-                            "  • {0}: {1}".format(os.path.basename(file_path), reason),
-                            color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
-                        )
+        self.log_viewer.clear()
+        self.append_styled_content(_("Searching..."), color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+
+        worker = LogSearchThread(
+            generation, list_file_paths, self._matcher(search_re, search_text_lower),
+            tracker.log_key_candidates, search_text, all_files)
+        worker.searched.connect(self._on_search_done)
+        worker.failed.connect(self._on_search_failed)
+        self._start_worker(worker)
+
+    def _on_search_done(self, generation, outcome):
+        worker = self._take_result(generation)
+        if not self._is_current(generation) or worker is None:
             return
+        if worker.all_files:
+            self._show_all_files_outcome(outcome, worker.search_text)
+        else:
+            self._show_single_file_outcome(outcome, worker.search_text)
+        self.search_finished.emit()
 
-        log_file_path = self.get_current_log_file_path()
-        if not log_file_path:
+    def _on_search_failed(self, generation, message):
+        self._take_result(generation)
+        if not self._is_current(generation):
             return
+        self.log_viewer.clear()
+        self.append_styled_content(_("❌ Search failed: {0}").format(message),
+                                   color=ThemeManager.DARK_THEME["log_viewer"]["error"])
+        self.search_finished.emit()
 
-        matches, error = self._find_matches_in_file(
-            log_file_path, search_re, search_text_lower
-        )
-        if error:
+    def _show_all_files_outcome(self, outcome, search_text):
+        if outcome.files_searched == 0:
             self.log_viewer.clear()
-            error_kind, message = error
-            if error_kind == "validation":
+            self.append_styled_content(
+                _("No log files found in the tracked directories."),
+                color=ThemeManager.DARK_THEME["log_viewer"]["warning"],
+            )
+            return
+
+        if outcome.file_results:
+            self._display_all_files_search_results(
+                outcome.file_results, outcome.skipped_files, search_text, outcome.files_searched
+            )
+            return
+
+        self.log_viewer.clear()
+        mode, scope = self._search_scope_description()
+        self.append_styled_content(
+            _("No matches found for '{0}' across {1} file(s) ({2}, {3})").format(
+                search_text, outcome.files_searched, mode, scope),
+            color=ThemeManager.DARK_THEME["log_viewer"]["error"],
+        )
+        self._display_skipped_files(outcome.skipped_files)
+
+    def _show_single_file_outcome(self, outcome, search_text):
+        if outcome.skipped_files:
+            self.log_viewer.clear()
+            _file_path, kind, message = outcome.skipped_files[0]
+            if kind == log_search.SKIP_VALIDATION:
                 self.append_styled_content(
                     _("⚠️  Cannot search file: {0}").format(message),
                     color=ThemeManager.DARK_THEME["log_viewer"]["error"],
@@ -856,16 +928,18 @@ class MainWindow(QMainWindow):
                 )
             return
 
-        if matches:
-            self._display_single_file_search_results(log_file_path, matches, search_text)
-        else:
-            self.log_viewer.clear()
-            mode, scope = self._search_scope_description()
-            self.append_styled_content(
-                _("No matches found for '{0}' ({1}, {2})").format(search_text, mode, scope),
-                color=ThemeManager.DARK_THEME["log_viewer"]["error"],
-            )
-    
+        if outcome.file_results:
+            log_file_path, blocks = outcome.file_results[0]
+            self._display_single_file_search_results(log_file_path, blocks, search_text)
+            return
+
+        self.log_viewer.clear()
+        mode, scope = self._search_scope_description()
+        self.append_styled_content(
+            _("No matches found for '{0}' ({1}, {2})").format(search_text, mode, scope),
+            color=ThemeManager.DARK_THEME["log_viewer"]["error"],
+        )
+
     def edit_tracker(self, item):
         """Edit the selected tracker"""
         if not item:
@@ -921,6 +995,7 @@ class MainWindow(QMainWindow):
         if self.current_tracker and self.current_tracker.name == tracker.name:
             self.current_tracker = None
             self.files_list.clear()
+            self._begin_viewer_update()
             self.log_viewer.clear()
 
         self.load_trackers()
@@ -1019,6 +1094,11 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Handle window close event"""
+        # Destroying a QThread that is still running aborts the process, so
+        # outstanding workers are stopped where they can be and waited for.
+        self._begin_viewer_update()
+        for worker in self._workers:
+            worker.wait()
         self.save_window_state()
         self.config_manager.flush_cache()
         super().closeEvent(event) 

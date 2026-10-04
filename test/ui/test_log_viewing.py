@@ -8,6 +8,7 @@ import re
 import pytest
 
 from src.internal.tracker import Tracker
+from src.utils.file_handler import FileHandler
 from src.utils.translations import _
 
 pytestmark = pytest.mark.ui
@@ -66,7 +67,7 @@ def test_display_log_file_shows_content_and_header(qtbot, window, tmp_path):
     log_file = log_dir / "app.log"
     log_file.write_bytes(b"line one\nline two\nline three\n")
 
-    window.display_log_file(str(log_file))
+    _display(qtbot, window, str(log_file))
 
     result = window.log_viewer.toPlainText()
     assert "line one" in result
@@ -85,7 +86,7 @@ def test_display_log_file_renders_ansi_codes(qtbot, window, tmp_path):
     log_file = log_dir / "app.log"
     log_file.write_bytes(b"\x1b[31mred error\x1b[0m\n")
 
-    window.display_log_file(str(log_file))
+    _display(qtbot, window, str(log_file))
 
     result = window.log_viewer.toPlainText()
     assert "red error" in result
@@ -93,7 +94,7 @@ def test_display_log_file_renders_ansi_codes(qtbot, window, tmp_path):
 
 
 def test_display_log_file_shows_error_for_missing_file(qtbot, window, tmp_path):
-    window.display_log_file(str(tmp_path / "does-not-exist.log"))
+    _display(qtbot, window, str(tmp_path / "does-not-exist.log"))
 
     _assert_in(_msg_start("⚠️  Cannot display file: {0}"), window.log_viewer.toPlainText())
 
@@ -104,7 +105,7 @@ def test_display_log_file_shows_error_for_binary_file(qtbot, window, tmp_path):
     binary_file = log_dir / "app.log"
     binary_file.write_bytes(bytes(range(256)) * 20)
 
-    window.display_log_file(str(binary_file))
+    _display(qtbot, window, str(binary_file))
 
     _assert_in(_msg_start("⚠️  Cannot display file: {0}"), window.log_viewer.toPlainText())
 
@@ -116,7 +117,7 @@ def test_display_log_file_truncates_single_very_long_line(qtbot, window, tmp_pat
     long_line = b"x" * 1_200_000  # over the 1MB threshold, single line (no newline)
     log_file.write_bytes(long_line)
 
-    window.display_log_file(str(log_file))
+    _display(qtbot, window, str(log_file))
 
     result = window.log_viewer.toPlainText()
     _assert_in(_("⚠️  File contains a very long line. Showing first 10KB:"), result)
@@ -132,13 +133,23 @@ def test_display_log_file_loads_large_multiline_file_in_chunks(qtbot, window, tm
     content = ("\n".join([line] * 2000) + "\n").encode("utf-8")  # over 1MB, over 100 lines
     log_file.write_bytes(content)
 
-    window.display_log_file(str(log_file))
+    _display(qtbot, window, str(log_file))
 
     result = window.log_viewer.toPlainText()
     _assert_in(line, result)
     assert len(result) > 1_000_000  # loaded in full, unlike the single-long-line truncation path
     _assert_in("app.log", result)  # header line intact
     _assert_in(_msg_start("Size: {0}"), result)  # size/line-count header line intact too
+
+
+#: Generous: the file is read on a worker thread, and a loaded CI machine can be slow.
+LOAD_TIMEOUT_MS = 10_000
+
+
+def _display(qtbot, window, file_path):
+    """Display *file_path* and wait for it to reach the viewer."""
+    with qtbot.waitSignal(window.log_displayed, timeout=LOAD_TIMEOUT_MS):
+        window.display_log_file(file_path)
 
 
 def _select_tracker_for(window, log_dir, **encryption):
@@ -158,7 +169,7 @@ def test_display_log_file_decrypts_an_encrypted_log(qtbot, window, tmp_path, wri
         log_dir / "app_2026-09-30.log.enc", ["INFO started", "ERROR it broke"], app_identifier="app")
     _select_tracker_for(window, log_dir)
 
-    window.display_log_file(str(encrypted_file))
+    _display(qtbot, window, str(encrypted_file))
 
     result = window.log_viewer.toPlainText()
     _assert_in("INFO started", result)
@@ -173,7 +184,7 @@ def test_display_log_file_explains_an_encrypted_log_it_cannot_open(
     encrypted_file = write_encrypted_log(log_dir / "app.log.enc", ["INFO secret"], app_identifier="app")
     _select_tracker_for(window, log_dir, app_id="wrong")
 
-    window.display_log_file(str(encrypted_file))
+    _display(qtbot, window, str(encrypted_file))
 
     result = window.log_viewer.toPlainText()
     _assert_not_in("INFO secret", result)
@@ -189,7 +200,7 @@ def test_display_log_file_shows_only_the_tail_of_a_large_file(qtbot, window, tmp
     log_file.write_bytes(b"".join(b"line %05d\n" % i for i in range(2000)))
     window.config_manager.set("log_viewer.max_load_bytes", 2048)
 
-    window.display_log_file(str(log_file))
+    _display(qtbot, window, str(log_file))
 
     result = window.log_viewer.toPlainText()
     _assert_in("line 01999", result)
@@ -205,9 +216,78 @@ def test_display_log_file_does_not_announce_a_tail_for_a_small_file(qtbot, windo
     log_file.write_bytes(b"line one\nline two\n")
     window.config_manager.set("log_viewer.max_load_bytes", 2048)
 
-    window.display_log_file(str(log_file))
+    _display(qtbot, window, str(log_file))
 
     result = window.log_viewer.toPlainText()
     _assert_not_in(_msg_start(_TAIL_NOTICE), result)
     _assert_in(f'{_("Lines")}: 3', result)
 
+
+def _wait_for_all_workers(qtbot, window):
+    """Wait until every worker has stopped and its result, stale or not, has arrived."""
+    qtbot.waitUntil(
+        lambda: all(w.isFinished() and w.delivered for w in window._workers),
+        timeout=LOAD_TIMEOUT_MS)
+
+
+def _counting(monkeypatch, method_name):
+    """Wrap a FileHandler method so each call's file path is recorded."""
+    calls = []
+    original = getattr(FileHandler, method_name)
+
+    def wrapper(self, file_path, *args, **kwargs):
+        calls.append(file_path)
+        return original(self, file_path, *args, **kwargs)
+
+    monkeypatch.setattr(FileHandler, method_name, wrapper)
+    return calls
+
+
+def test_a_newer_request_replaces_a_load_still_in_flight(qtbot, window, tmp_path):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    first = log_dir / "first.log"
+    first.write_bytes(b"content of the first file\n")
+    second = log_dir / "second.log"
+    second.write_bytes(b"content of the second file\n")
+
+    with qtbot.waitSignal(window.log_displayed, timeout=LOAD_TIMEOUT_MS,
+                          check_params_cb=lambda path: path == str(second)):
+        window.display_log_file(str(first))
+        window.display_log_file(str(second))
+    _wait_for_all_workers(qtbot, window)
+
+    result = window.log_viewer.toPlainText()
+    _assert_in("content of the second file", result)
+    _assert_not_in("content of the first file", result)
+
+
+def test_refresh_reads_the_selected_file_once(qtbot, window, tmp_path, monkeypatch):
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log_file = log_dir / "app.log"
+    log_file.write_bytes(b"line one\n")
+    _select_tracker_for(window, log_dir)
+    with qtbot.waitSignal(window.log_displayed, timeout=LOAD_TIMEOUT_MS):
+        window.update_log_files_list()
+    _wait_for_all_workers(qtbot, window)
+    reads = _counting(monkeypatch, "read_tail_safe")
+
+    with qtbot.waitSignal(window.log_displayed, timeout=LOAD_TIMEOUT_MS):
+        window.refresh_current_log()
+    _wait_for_all_workers(qtbot, window)
+
+    assert reads == [str(log_file)]
+
+
+def test_viewing_a_file_inspects_it_once(qtbot, window, tmp_path, monkeypatch):
+    """Validation's file info is handed to the read rather than gathered twice."""
+    log_dir = tmp_path / "logs"
+    log_dir.mkdir()
+    log_file = log_dir / "app.log"
+    log_file.write_bytes(b"line one\n")
+    inspections = _counting(monkeypatch, "get_file_info")
+
+    _display(qtbot, window, str(log_file))
+
+    assert inspections == [str(log_file)]
