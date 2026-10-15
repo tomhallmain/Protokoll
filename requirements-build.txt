@@ -1,10 +1,12 @@
 # Everything build_exe.py needs: Nuitka, plus every package the built app
 # imports (requirements.txt). liboqs-python comes with --with-oqs.
 -r requirements.txt
-# The version the other apps of this family built with; 4.3 was seen to crash
-# a PySide6 app at runtime. PyQt6 is not pinned yet: the first build records
-# the version it took in build/nuitka/build_info.json.
+# A set known to build and run: the Nuitka version the other apps of this
+# family built with (4.3 was seen to crash a PySide6 app at runtime), and the
+# PyQt6 and Qt versions of Protokoll's first working build.
 nuitka==4.2.2
+PyQt6==6.11.0
+PyQt6-Qt6==6.11.2
 # Compresses the onefile payload.
 zstandard
 # psutil (requirements.txt) also lets scripts/nuitka_memory_wait.py read free
