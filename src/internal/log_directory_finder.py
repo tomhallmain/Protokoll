@@ -33,6 +33,9 @@ class LogDirectoryFinder:
         r'tmp'
     ]
     
+    # Names of an app directory's own log subdirectory ("logs", "Log", "logfiles", "logging").
+    LOG_SUBDIR_NAME = re.compile(r'^(logs?|logfiles?|logging)$', re.IGNORECASE)
+
     # Common log file extensions (using FileHandler's extended list)
     LOG_EXTENSIONS = FileHandler.LOG_EXTENSIONS
     
@@ -277,8 +280,9 @@ class LogDirectoryFinder:
                 # Check exact match
                 if dir_name == app_name_lower:
                     if LogDirectoryFinder._has_log_files(root, max_depth):
-                        exact_matches.add(root)
-                        logger.info(f"Found exact match: {root}")
+                        for match in LogDirectoryFinder._log_subdirectories(root, max_depth) or [root]:
+                            exact_matches.add(match)
+                            logger.info(f"Found exact match: {match}")
         
         # Return early if exact matches found
         if exact_matches:
@@ -351,6 +355,26 @@ class LogDirectoryFinder:
         except Exception as e:
             logger.error(f"Error checking directory {dir_path}: {str(e)}")
             return True
+
+    @staticmethod
+    def _log_subdirectories(directory: str, max_depth: int) -> List[str]:
+        """The log subdirectories of an app directory that hold log files.
+
+        An app directory can also hold unrelated files with log-like extensions
+        (bundled .json/.txt in unpacked runtimes, for example), so where it has
+        its own log subdirectory, that is what gets tracked.
+        """
+        try:
+            entries = sorted(os.listdir(directory))
+        except OSError:
+            return []
+        subdirs = []
+        for entry in entries:
+            path = os.path.join(directory, entry)
+            if (LogDirectoryFinder.LOG_SUBDIR_NAME.match(entry) and os.path.isdir(path)
+                    and LogDirectoryFinder._has_log_files(path, max_depth)):
+                subdirs.append(path)
+        return subdirs
 
     @staticmethod
     def _has_log_files(directory: str, max_depth: int) -> bool:

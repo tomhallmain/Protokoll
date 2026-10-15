@@ -39,6 +39,32 @@ def test_find_log_directories_returns_exact_match(tmp_path, monkeypatch):
     assert results["potential_matches"] == []
 
 
+def test_exact_match_is_narrowed_to_its_logs_subdirectory(tmp_path, monkeypatch):
+    app_dir = tmp_path / "muse"
+    logs_dir = app_dir / "logs"
+    logs_dir.mkdir(parents=True)
+    (logs_dir / "muse.log").write_bytes(b"entry\n")
+    bundled = app_dir / "unpacked" / "muse-20261009" / "tts"
+    bundled.mkdir(parents=True)
+    (bundled / "config.json").write_bytes(b"{}")
+    _use_app_data_dirs(monkeypatch, [str(tmp_path)])
+
+    results = LogDirectoryFinder.find_log_directories("muse")
+
+    assert results["exact_matches"] == [str(logs_dir)]
+
+
+def test_exact_match_is_kept_when_its_logs_subdirectory_has_no_log_files(tmp_path, monkeypatch):
+    app_dir = tmp_path / "muse"
+    (app_dir / "logs").mkdir(parents=True)
+    (app_dir / "muse.log").write_bytes(b"entry\n")
+    _use_app_data_dirs(monkeypatch, [str(tmp_path)])
+
+    results = LogDirectoryFinder.find_log_directories("muse")
+
+    assert results["exact_matches"] == [str(app_dir)]
+
+
 def test_find_log_directories_returns_potential_match_when_no_exact_match(tmp_path, monkeypatch):
     app_dir = tmp_path / "myapp-logs"
     app_dir.mkdir()
