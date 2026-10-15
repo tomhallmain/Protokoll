@@ -1,12 +1,13 @@
 from datetime import datetime
 import os
 import re
+import time
 
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                             QPushButton, QLabel, QLineEdit, QTextEdit,
                             QListWidget, QListWidgetItem, QFileDialog, QMessageBox, QFrame, QMenu,
                             QToolButton, QStyle, QSpinBox)
-from PyQt6.QtCore import Qt, QSize, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QPalette, QColor, QFontMetrics, QTextCursor
 
 from ..internal import log_content, log_entries, log_search
@@ -22,6 +23,12 @@ from .toast import show_toast
 from .tracker_dialog import DELETE_REQUESTED, TrackerDialog
 
 logger = get_logger('ui.main_window')
+
+#: After an automatic refresh that took t seconds, the next waits at least this
+#: many times t, so reloading a large file can't keep the GUI thread busy.
+AUTO_REFRESH_BACKOFF = 4
+#: Floor for the configured auto-refresh interval.
+MIN_AUTO_REFRESH_INTERVAL_MS = 200
 
 class MainWindow(QMainWindow):
     #: A log file's content (or the reason it can't be shown) is on screen.
@@ -40,6 +47,20 @@ class MainWindow(QMainWindow):
         # read_info has a start_offset past 0), else None.
         self._shown = None
         self._earlier_base = None
+
+        # Auto-refresh. _auto_refresh_view is the LoadResult whose whole file is
+        # on screen, or None while anything else is (a search, earlier lines, a
+        # load in progress), which is what pauses the refresh. _auto_refresh_signature
+        # is the (size, mtime) that view was read at.
+        self._auto_refresh_view = None
+        self._auto_refresh_signature = None
+        self._refresh_generation = None
+        self._refreshing_from = None
+        self._refresh_started_at = 0.0
+        self._next_auto_refresh_at = 0.0
+        self._auto_refresh_paused_for = None
+        self._auto_refresh_timer = QTimer(self)
+        self._auto_refresh_timer.timeout.connect(self._auto_refresh_tick)
 
         try:
             self.config_manager = ConfigManager()
@@ -215,11 +236,21 @@ class MainWindow(QMainWindow):
         refresh_btn = QPushButton(_("Refresh"))
         refresh_btn.setObjectName("refreshButton")
         refresh_btn.clicked.connect(self.refresh_current_log)
+
+        self.auto_refresh = QToolButton()
+        self.auto_refresh.setObjectName("autoRefresh")
+        self.auto_refresh.setCheckable(True)
+        self.auto_refresh.setChecked(self.config_manager.get(ConfigManager.AUTO_REFRESH))
+        self.auto_refresh.setIcon(style.standardIcon(QStyle.StandardPixmap.SP_BrowserReload))
+        self.auto_refresh.setToolTip(_("Reload the shown log file automatically when it changes"))
+        self.auto_refresh.toggled.connect(self._set_auto_refresh)
+        self._apply_auto_refresh(self.auto_refresh.isChecked())
         
         search_layout.addWidget(self.search_edit)
         search_layout.addWidget(search_btn)
         search_layout.addWidget(clear_btn)
         search_layout.addWidget(refresh_btn)
+        search_layout.addWidget(self.auto_refresh)
         search_layout.addWidget(self.show_line_numbers)
         search_layout.addWidget(self.use_regex)
         search_layout.addWidget(self.limit_to_line_start)
@@ -540,13 +571,19 @@ class MainWindow(QMainWindow):
     # Background work for the log viewer
     # ------------------------------------------------------------------
 
-    def _begin_viewer_update(self):
-        """Start a new request for the log viewer, making every earlier one stale."""
+    def _begin_viewer_update(self, keep_view=False):
+        """Start a new request for the log viewer, making every earlier one stale.
+
+        With *keep_view*, what is on screen stays usable until the result
+        replaces it, as an automatic refresh needs.
+        """
         self._generation += 1
         for worker in self._workers:
             worker.cancel()
-        self._shown = None
-        self.load_earlier_btn.hide()
+        self._auto_refresh_view = None
+        if not keep_view:
+            self._shown = None
+            self.load_earlier_btn.hide()
         return self._generation
 
     def _is_current(self, generation):
@@ -574,7 +611,9 @@ class MainWindow(QMainWindow):
         self.log_viewer.clear()
         self.append_styled_content(_("Loading {0}...").format(os.path.basename(file_path)),
                                    color=ThemeManager.DARK_THEME["log_viewer"]["info"])
+        self._start_load(generation, file_path)
 
+    def _start_load(self, generation, file_path):
         worker = LogLoadThread(
             generation, file_path,
             self.config_manager.get(ConfigManager.MAX_LOAD_BYTES),
@@ -586,9 +625,118 @@ class MainWindow(QMainWindow):
         self._take_result(generation)
         if not self._is_current(generation):
             return
+        if generation == self._refresh_generation:
+            self._show_refreshed(generation, result)
+            return
         if self._render_log_file(generation, result):
             self._remember_shown(result)
+            self._set_auto_refresh_view(result)
             self.log_displayed.emit(result.file_path)
+
+    # ------------------------------------------------------------------
+    # Automatic refresh of the shown file
+    # ------------------------------------------------------------------
+
+    def _set_auto_refresh(self, enabled):
+        self.config_manager.set(ConfigManager.AUTO_REFRESH, enabled)
+        self._apply_auto_refresh(enabled)
+
+    def _apply_auto_refresh(self, enabled):
+        if not enabled:
+            self._auto_refresh_timer.stop()
+            return
+        interval = self.config_manager.get(ConfigManager.AUTO_REFRESH_INTERVAL_MS)
+        self._auto_refresh_timer.start(max(MIN_AUTO_REFRESH_INTERVAL_MS, int(interval)))
+
+    def _set_auto_refresh_view(self, result):
+        self._auto_refresh_view = result
+        info = result.file_info
+        self._auto_refresh_signature = (info.get("size"), info.get("last_modified"))
+
+    def _auto_refresh_tick(self):
+        """Reload the shown file if it has changed on disk since it was read.
+
+        Skipped while the window is hidden or minimized, while text is selected
+        (a reload would drop the selection), and until the backoff after the
+        last refresh has passed.
+        """
+        view = self._auto_refresh_view
+        if (view is None or not self.isVisible() or self.isMinimized()
+                or time.monotonic() < self._next_auto_refresh_at
+                or self.log_viewer.textCursor().hasSelection()):
+            return
+        try:
+            stat = os.stat(view.file_path)
+        except OSError:
+            return  # Gone for now, e.g. mid-rotation; picked up once it is back.
+        signature = (stat.st_size, stat.st_mtime)
+        if signature == self._auto_refresh_signature:
+            return
+
+        # Only a plain file is read from its end; anything else is read whole.
+        info = view.file_info
+        if info.get("is_compressed") or info.get("is_encrypted"):
+            max_bytes = self.config_manager.get(ConfigManager.AUTO_REFRESH_MAX_FULL_READ_BYTES)
+            if stat.st_size > max_bytes:
+                if self._auto_refresh_paused_for != view.file_path:
+                    self._auto_refresh_paused_for = view.file_path
+                    show_toast(self, _(
+                        "Auto-refresh is paused for {0}: at {1} it is too large to read "
+                        "in full on every change. Use Refresh to reload it.").format(
+                            os.path.basename(view.file_path),
+                            FileHandler.format_size(stat.st_size)), duration_ms=5000)
+                return
+
+        self._refreshing_from = view
+        generation = self._begin_viewer_update(keep_view=True)
+        self._refresh_generation = generation
+        self._refresh_started_at = time.monotonic()
+        # Until the result says otherwise, so a failed read is not retried
+        # before the file changes again.
+        self._auto_refresh_signature = signature
+        self._start_load(generation, view.file_path)
+
+    def _show_refreshed(self, generation, result):
+        """Replace the view with a refreshed read, keeping the scroll position.
+
+        A failed read leaves the earlier content on screen. The viewer is not
+        repainted until the render is complete, so a chunked render doesn't
+        show partial content.
+        """
+        self._refresh_generation = None
+        if not (result.is_valid and result.success):
+            logger.debug(f"Auto-refresh of {result.file_path} failed; keeping what is shown")
+            self._auto_refresh_view = self._refreshing_from
+            self._schedule_next_auto_refresh()
+            return
+
+        vbar = self.log_viewer.verticalScrollBar()
+        hbar = self.log_viewer.horizontalScrollBar()
+        at_bottom = vbar.value() >= vbar.maximum() - 1
+        scroll_value, h_scroll_value = vbar.value(), hbar.value()
+
+        self.log_viewer.setUpdatesEnabled(False)
+        try:
+            rendered = self._render_log_file(generation, result)
+            if rendered:
+                vbar.setValue(vbar.maximum() if at_bottom else scroll_value)
+                hbar.setValue(h_scroll_value)
+        finally:
+            self.log_viewer.setUpdatesEnabled(True)
+        self._schedule_next_auto_refresh()
+        if not rendered:
+            return
+
+        self._shown = None
+        self.load_earlier_btn.hide()
+        self._remember_shown(result)
+        self._set_auto_refresh_view(result)
+        self.update_window_title()
+        self.log_displayed.emit(result.file_path)
+
+    def _schedule_next_auto_refresh(self):
+        took = time.monotonic() - self._refresh_started_at
+        self._next_auto_refresh_at = time.monotonic() + AUTO_REFRESH_BACKOFF * took
 
     def _remember_shown(self, result):
         """Offer "Load earlier lines" if *result* is a plain file shown from part way through."""
@@ -1197,6 +1345,7 @@ class MainWindow(QMainWindow):
         """Handle window close event"""
         # Destroying a QThread that is still running aborts the process, so
         # outstanding workers are stopped where they can be and waited for.
+        self._auto_refresh_timer.stop()
         self._begin_viewer_update()
         for worker in self._workers:
             worker.wait()

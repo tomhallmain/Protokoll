@@ -677,3 +677,11 @@ msgstr ""
 #: src/utils/file_handler.py:462
 msgid "This log is encrypted, and no key found for it opens it (tried: {0})."
 msgstr "This log is encrypted, and no key found for it opens it (tried: {0})."
+
+#: src/ui/main_window.py:245
+msgid "Reload the shown log file automatically when it changes"
+msgstr "Reload the shown log file automatically when it changes"
+
+#: src/ui/main_window.py:684
+msgid "Auto-refresh is paused for {0}: at {1} it is too large to read in full on every change. Use Refresh to reload it."
+msgstr "Auto-refresh is paused for {0}: at {1} it is too large to read in full on every change. Use Refresh to reload it."

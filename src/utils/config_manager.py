@@ -43,6 +43,9 @@ class ConfigManager:
     WINDOW_Y = "window.y"
     CUSTOM_EDITOR_COMMAND = "custom_editor_command"
     MAX_LOAD_BYTES = "log_viewer.max_load_bytes"
+    AUTO_REFRESH = "log_viewer.auto_refresh"
+    AUTO_REFRESH_INTERVAL_MS = "log_viewer.auto_refresh_interval_ms"
+    AUTO_REFRESH_MAX_FULL_READ_BYTES = "log_viewer.auto_refresh_max_full_read_bytes"
     SEARCH_SHOW_LINE_NUMBERS = "search.show_line_numbers"
     SEARCH_USE_REGEX = "search.use_regex"
     SEARCH_LIMIT_TO_LINE_START = "search.limit_to_line_start"
@@ -80,7 +83,13 @@ class ConfigManager:
                 # How much of a log file's end the viewer loads. Everything
                 # before it stays on disk, so opening a huge file costs the same
                 # as opening a small one.
-                "max_load_bytes": FileHandler.DEFAULT_TAIL_BYTES
+                "max_load_bytes": FileHandler.DEFAULT_TAIL_BYTES,
+                # Reload the shown file when it changes on disk, checking this
+                # often. A compressed or encrypted file is read whole on every
+                # reload, so one larger than the cap below is not reloaded.
+                "auto_refresh": False,
+                "auto_refresh_interval_ms": 2000,
+                "auto_refresh_max_full_read_bytes": 20 * 1024 * 1024
             },
             "search": {
                 "show_line_numbers": True,
