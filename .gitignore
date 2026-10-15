@@ -26,6 +26,7 @@ env/
 ENV/
 .env
 .venv
+.venv-build/
 env.bak/
 venv.bak/
 

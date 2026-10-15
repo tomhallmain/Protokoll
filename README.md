@@ -26,8 +26,48 @@ A desktop application for managing and viewing log files across different projec
    ```
 3. Run the application:
    ```
-   python main.py
+   python run.py
    ```
+
+## Building an executable
+
+`build_exe.py` builds a single executable with [Nuitka](https://nuitka.net):
+`dist/Protokoll.exe` on Windows, `dist/Protokoll` on macOS and Linux. It runs
+on a machine without Python and uses the same settings, trackers and keys as
+`python run.py`.
+
+1. Use Python 3.11 and a C compiler (Visual Studio Build Tools on Windows,
+   or let Nuitka download MinGW; Xcode Command Line Tools on macOS).
+2. Build:
+   ```
+   python build_exe.py
+   ```
+   The script creates its own `.venv-build` from `requirements-build.txt`,
+   compiles, copies the result to `dist/` and runs it once with
+   `--smoke-test` in a scratch environment. Add `--with-oqs` for quantum-safe
+   (OQS) key encapsulation; a build without it cannot read data encrypted with
+   OQS keys. The log of each build is in `build/logs/`.
+3. Publish it as a GitHub release (needs the GitHub CLI, `gh`):
+   ```
+   python scripts/package_release.py
+   ```
+   It rebuilds the executable if it is behind the checkout, stages it with its
+   checksums and lock file, and creates a draft release after asking; rerun with
+   `--publish` to publish the draft.
+
+Where the executable keeps its files:
+
+- Settings and trackers: `~/.protokoll` (as when run from source).
+- Its unpacked runtime: `~/.protokoll/unpacked/protokoll-<build id>`. The first
+  start of a new build unpacks it; that start also removes older builds'
+  folders.
+- Its own logs, and `faults.log` for native crashes: `%APPDATA%\protokoll\logs`
+  on Windows, `~/.local/share/protokoll/logs` elsewhere. The first lines of
+  each log name the version and build.
+
+The build records the path of the checkout it was built from, which anyone
+with the executable can read; a build warns at startup when that checkout has
+moved on since.
 
 ## Encrypted state
 

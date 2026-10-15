@@ -2,15 +2,11 @@ import gettext
 import os
 import re
 
+from .app_paths import resource_path
 from .logging_setup import get_logger
 from .utils import Utils
 
 logger = get_logger("utils.translations")
-
-
-def repo_root():
-    """The directory holding locale/, two levels above this package."""
-    return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 _locale = os.environ['LANG'] if "LANG" in os.environ else None
@@ -20,7 +16,7 @@ elif _locale is not None and "_" in _locale:
     _locale = _locale[:_locale.index("_")]
 
 class I18N:
-    localedir = os.path.join(repo_root(), 'locale')
+    localedir = resource_path('locale')
     locale = "en"
     # fallback=True: the compiled .mo files are generated separately, and every
     # string reads as its own English source until they are in place.

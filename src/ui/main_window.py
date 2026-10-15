@@ -35,6 +35,9 @@ class MainWindow(QMainWindow):
     log_displayed = pyqtSignal(str)
     #: A search request has finished and its outcome is on screen.
     search_finished = pyqtSignal()
+    #: A build's startup check found its source checkout has changed; carries
+    #: the detail. Emitted from a background thread.
+    source_drift = pyqtSignal(str)
 
     def __init__(self):
         super().__init__()
@@ -77,6 +80,7 @@ class MainWindow(QMainWindow):
         except Exception as e:
             logger.error(f"MainWindow.__init__: Failed to setup UI: {str(e)}")
             raise
+        self.source_drift.connect(self._notify_source_drift)
         
         try:
             self.load_window_state()
@@ -1352,6 +1356,12 @@ class MainWindow(QMainWindow):
         self.save_window_state()
         self.config_manager.flush_cache()
         super().closeEvent(event) 
+
+    def _notify_source_drift(self, detail: str):
+        """Tell the user this build no longer matches its source checkout.
+        *detail* is already in the log."""
+        show_toast(self, _("This build differs from its source checkout. Details are in the log."),
+                   duration_ms=8000)
 
     def handle_error(self, error_message: str):
         QMessageBox.warning(self, _("Error"), error_message)

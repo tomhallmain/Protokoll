@@ -685,3 +685,7 @@ msgstr "Reload the shown log file automatically when it changes"
 #: src/ui/main_window.py:684
 msgid "Auto-refresh is paused for {0}: at {1} it is too large to read in full on every change. Use Refresh to reload it."
 msgstr "Auto-refresh is paused for {0}: at {1} it is too large to read in full on every change. Use Refresh to reload it."
+
+#: src/ui/main_window.py:1363
+msgid "This build differs from its source checkout. Details are in the log."
+msgstr "This build differs from its source checkout. Details are in the log."
