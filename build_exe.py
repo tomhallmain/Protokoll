@@ -108,6 +108,10 @@ _VERSIONS_PROBE = (
     "print(json.dumps({'python': sys.version.split()[0],\n"
     "                  'packages': {n: get(n) for n in sys.argv[1:]}}))\n"
 )
+# Prints the folder of the chardet package the build venv imports.
+_CHARDET_PROBE = "import os, chardet\nprint(os.path.dirname(os.path.abspath(chardet.__file__)))\n"
+# Code, not data, in a package folder.
+_CODE_SUFFIXES = (".py", ".pyc", ".pyd", ".pyi", ".so", ".dll")
 # Renders ICON_PNG (argv[1]) to a 256px .ico (argv[2]) with the build venv's Qt.
 _ICON_SCRIPT = (
     "import sys\n"
@@ -356,6 +360,32 @@ def _oqs_args(python: str, with_oqs: bool) -> list:
     ]
 
 
+def _package_data_files(package_dir: str, package: str) -> list:
+    """Every data file under *package_dir*, as (source path, path in the build)."""
+    files = []
+    for folder, dirs, names in os.walk(package_dir):
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
+        for name in sorted(names):
+            if name.endswith(_CODE_SUFFIXES):
+                continue
+            source = os.path.join(folder, name)
+            target = os.path.join(package, os.path.relpath(source, package_dir)).replace(os.sep, "/")
+            files.append((source, target))
+    return sorted(files)
+
+
+def _chardet_args(python: str) -> list:
+    """chardet 7 reads its detection models (models/*.bin) from its package
+    folder on first use. --include-package-data=chardet bundled only
+    models/training_metadata.yaml, not the .bin files, so each data file is
+    named explicitly."""
+    probe = subprocess.run([python, "-c", _CHARDET_PROBE], capture_output=True, text=True, check=True)
+    package_dir = probe.stdout.strip().splitlines()[-1]
+    files = _package_data_files(package_dir, "chardet")
+    logger.info(f"Bundling {len(files)} chardet data file(s) from {package_dir}")
+    return [f"--include-data-files={source}={target}" for source, target in files]
+
+
 def _nuitka_env(min_free_memory=None) -> dict:
     env = dict(os.environ)
     if min_free_memory is not None:
@@ -406,10 +436,10 @@ def _smoke_test_env(scratch: str) -> dict:
 
 def _smoke_test(exe_path: str, with_oqs: bool) -> None:
     # Run from outside the repo so a passing test can't depend on the checkout,
-    # with all app data in a scratch directory so the user's is untouched. The
-    # environment also points HOME there; if Nuitka resolves {HOME} from it,
-    # the exe unpacks into the scratch directory, and the first real start
-    # unpacks again.
+    # with all app data in a scratch directory so the user's is untouched. On
+    # Windows Nuitka resolves {HOME} without the HOME set here, so the exe
+    # unpacks to the real ~/.protokoll/unpacked/, which a later start of this
+    # build reuses.
     command = [exe_path, "--smoke-test", *(["--expect-oqs"] if with_oqs else [])]
     with tempfile.TemporaryDirectory(prefix="protokoll-smoke-", ignore_cleanup_errors=True) as scratch:
         result = subprocess.run(command, cwd=os.path.expanduser("~"), env=_smoke_test_env(scratch))
@@ -454,12 +484,12 @@ def main() -> None:
     _write_build_info(version, build_id, _environment_versions(python), with_oqs)
     if sys.platform == "win32" and _has_icon():
         _write_windows_icon(python)
-    oqs_args = _oqs_args(python, with_oqs)
+    extra_args = _oqs_args(python, with_oqs) + _chardet_args(python)
 
     for base_name, entry, unpack_prefix, target_args in TARGETS:
         exe_name = _exe_name(base_name)
         nuitka_args = [
-            *_common_args(exe_name, unpack_prefix, version, build_id), *target_args(), *oqs_args,
+            *_common_args(exe_name, unpack_prefix, version, build_id), *target_args(), *extra_args,
             *args, os.path.join(REPO_ROOT, entry),
         ]
         with _timed(f"Compiling {base_name} with Nuitka"):

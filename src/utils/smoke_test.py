@@ -73,6 +73,7 @@ class SmokeTest:
 
         self.scratch = scratch
         self.failures = []
+        self._app = None
         self.logger = get_logger("smoke_test")
 
     def check(self, name: str, ok: bool, detail: str = "") -> None:
@@ -242,22 +243,67 @@ class SmokeTest:
         path = enable_fault_log()
         self.check("fault log", os.path.isfile(path), path)
 
+    def _qt_app(self):
+        """The QApplication, created on first use and kept for the rest of the
+        run: PyQt destroys one nothing references, and an event loop without
+        it never delivers a worker thread's signal."""
+        from PyQt6.QtWidgets import QApplication
+
+        if self._app is None:
+            self._app = QApplication.instance() or QApplication([])
+        return self._app
+
     def check_qt(self) -> None:
         """A QApplication, Qt's messages reaching the log, and the main window
         created and closed (offscreen)."""
-        from PyQt6.QtWidgets import QApplication
-
         from ..ui.main_window import MainWindow
         from ..ui.qt_message_log import qt_message_reaches_logging
         from .theme_manager import ThemeManager
 
-        app = QApplication.instance() or QApplication([])
+        app = self._qt_app()
         self.check("Qt messages logged", qt_message_reaches_logging())
         ThemeManager.apply_dark_theme(app)
         window = MainWindow()
         window.close()
         window.deleteLater()
         self.check("main window", True)
+
+    def check_qt_thread(self) -> None:
+        """A log read on a LogLoadThread, its result delivered back to this
+        thread through a queued signal, as the viewer receives every load and
+        search. Nuitka's PyQt6 plugin warns that Qt threading may not work."""
+        import os
+
+        from PyQt6.QtCore import QEventLoop, QTimer
+
+        from ..ui.log_workers import LogLoadThread
+
+        self._qt_app()
+        path = os.path.join(self.scratch, "thread.log")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("thread smoke line\n")
+        results = []
+        loop = QEventLoop()
+
+        def loaded(_generation, result):
+            results.append(result)
+            loop.quit()
+
+        worker = LogLoadThread(1, path, 1024 * 1024, [])
+        worker.loaded.connect(loaded)
+        timeout = QTimer()
+        timeout.setSingleShot(True)
+        timeout.timeout.connect(loop.quit)
+        timeout.start(10000)
+        worker.start()
+        loop.exec()
+        timeout.stop()
+        finished = worker.wait(5000)
+        result = results[0] if results else None
+        self.check("Qt worker thread",
+                   finished and result is not None and result.success
+                   and "thread smoke line" in result.content,
+                   "" if results else "no result within 10s")
 
 
 def run_smoke_test(scratch: str, expect_oqs: bool = False) -> int:
@@ -275,4 +321,5 @@ def run_smoke_test(scratch: str, expect_oqs: bool = False) -> int:
     smoke.guarded("process list", smoke.check_process_list)
     smoke.guarded("fault log", smoke.check_fault_log)
     smoke.guarded("Qt", smoke.check_qt)
+    smoke.guarded("Qt worker thread", smoke.check_qt_thread)
     return smoke.result()

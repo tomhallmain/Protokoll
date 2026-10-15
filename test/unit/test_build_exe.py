@@ -214,3 +214,25 @@ def test_build_requirements_leave_out_the_pathlib_backport():
         with open(app_paths.resource_path(name), "r", encoding="utf-8") as f:
             names = [line.split("#")[0].strip().split(">")[0].split("=")[0].lower() for line in f]
         assert "pathlib" not in names, name
+
+
+def test_package_data_files_leave_out_code(build_exe, tmp_path):
+    package = tmp_path / "chardet"
+    (package / "models").mkdir(parents=True)
+    (package / "__pycache__").mkdir()
+    for name in ("__init__.py", "_kernel.pyd", "models/idf.bin", "models/training_metadata.yaml",
+                 "__pycache__/x.pyc", "py.typed"):
+        (package / name).write_bytes(b"x")
+    targets = [target for _source, target in build_exe._package_data_files(str(package), "chardet")]
+    assert targets == ["chardet/models/idf.bin", "chardet/models/training_metadata.yaml", "chardet/py.typed"]
+
+
+def test_chardet_data_is_bundled_file_by_file(build_exe):
+    """Run against this interpreter's chardet; every data file it has is named."""
+    import chardet
+
+    args = build_exe._chardet_args(sys.executable)
+    package_dir = os.path.dirname(os.path.abspath(chardet.__file__))
+    expected = build_exe._package_data_files(package_dir, "chardet")
+    assert args == [f"--include-data-files={source}={target}" for source, target in expected]
+

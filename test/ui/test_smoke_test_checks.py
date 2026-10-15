@@ -42,6 +42,11 @@ def test_check_passes(smoke, check):
     assert smoke.failures == []
 
 
+def test_qt_thread_check_passes(smoke, qtbot):
+    smoke.guarded("Qt worker thread", smoke.check_qt_thread)
+    assert smoke.failures == []
+
+
 def test_process_list_check_passes(smoke):
     pytest.importorskip("psutil")
     smoke.check_process_list()
