@@ -254,14 +254,21 @@ class SmokeTest:
         return self._app
 
     def check_qt(self) -> None:
-        """A QApplication, Qt's messages reaching the log, and the main window
-        created and closed (offscreen)."""
+        """A QApplication, Qt's messages reaching the log, the window icon
+        readable, and the main window created and closed (offscreen)."""
+        from PyQt6.QtGui import QImage
+
         from ..ui.main_window import MainWindow
         from ..ui.qt_message_log import qt_message_reaches_logging
+        from .app_paths import ICON_FILE, resource_path
         from .theme_manager import ThemeManager
 
         app = self._qt_app()
         self.check("Qt messages logged", qt_message_reaches_logging())
+        # A missing file or a build without Qt's ICO image plugin shows no
+        # icon and raises nothing; reading it here catches both.
+        icon_path = resource_path(ICON_FILE)
+        self.check("window icon", not QImage(icon_path).isNull(), icon_path)
         ThemeManager.apply_dark_theme(app)
         window = MainWindow()
         window.close()

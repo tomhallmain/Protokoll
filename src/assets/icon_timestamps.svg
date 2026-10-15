@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256">
+  <!-- Two-tone "P": blue timestamp column forms the stem, message text forms the bowl -->
+  <rect width="64" height="64" rx="12" fill="#1e1e1e"/>
+  <g fill="#569cd6">
+    <rect x="12" y="10" width="9" height="5" rx="2.5"/>
+    <rect x="12" y="18" width="9" height="5" rx="2.5"/>
+    <rect x="12" y="26" width="9" height="5" rx="2.5"/>
+    <rect x="12" y="34" width="9" height="5" rx="2.5"/>
+    <rect x="12" y="42" width="9" height="5" rx="2.5"/>
+    <rect x="12" y="50" width="9" height="5" rx="2.5"/>
+  </g>
+  <g fill="#d4d4d4">
+    <rect x="24" y="10" width="18" height="5" rx="2.5"/>
+    <rect x="37" y="18" width="12" height="5" rx="2.5"/>
+    <rect x="37" y="26" width="12" height="5" rx="2.5"/>
+    <rect x="24" y="34" width="18" height="5" rx="2.5"/>
+  </g>
+  <g fill="#4a4a4a">
+    <rect x="24" y="42" width="28" height="5" rx="2.5"/>
+    <rect x="24" y="50" width="19" height="5" rx="2.5"/>
+  </g>
+</svg>

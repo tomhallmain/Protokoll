@@ -2,9 +2,11 @@ import logging
 import os
 import sys
 
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication
 from .ui.main_window import MainWindow
 from .ui.qt_message_log import install_qt_message_handler
+from .utils.app_paths import ICON_FILE, resource_path
 from .utils.build_maintenance import start_build_maintenance
 from .utils.crash_log import enable_fault_log
 from .utils.logging_setup import get_logger
@@ -28,6 +30,7 @@ def main():
     # Create application
     app = QApplication(sys.argv)
     app.setApplicationName("Protokoll")
+    app.setWindowIcon(QIcon(resource_path(ICON_FILE)))
     
     # Apply dark theme
     ThemeManager.apply_dark_theme(app)

@@ -84,16 +84,14 @@ def test_gui_target_uses_the_pyqt6_plugin(build_exe):
     assert not any("pyside6" in a.lower() for a in args)
 
 
-def test_icon_is_used_only_when_the_png_exists(build_exe, monkeypatch, tmp_path):
-    monkeypatch.setattr(build_exe, "REPO_ROOT", str(tmp_path))
-    assert not build_exe._has_icon()
-    assert not any(a.startswith("--windows-icon-from-ico=") for a in _args(build_exe))
-    (tmp_path / "assets").mkdir()
-    (tmp_path / "assets" / "icon.png").write_bytes(b"png")
-    assert build_exe._has_icon()
+def test_icon_is_the_one_the_app_loads(build_exe):
+    assert build_exe.ICON_FILE == app_paths.ICON_FILE
+    assert os.path.isfile(os.path.join(build_exe.REPO_ROOT, build_exe.ICON_FILE))
+    args = _args(build_exe)
+    assert f"--include-data-files={build_exe.ICON_FILE}={build_exe.ICON_FILE}" in args
     # Only Windows executables carry an icon; sys.platform is left alone here.
-    if sys.platform == "win32":
-        assert f"--windows-icon-from-ico={build_exe.ICON_ICO}" in _args(build_exe)
+    icon_arg = f"--windows-icon-from-ico={os.path.join(build_exe.REPO_ROOT, build_exe.ICON_FILE)}"
+    assert (icon_arg in args) == (sys.platform == "win32")
 
 
 def test_build_without_oqs_leaves_it_out(build_exe):

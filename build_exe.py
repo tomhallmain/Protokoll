@@ -35,8 +35,8 @@ encrypted with OQS keys cannot be read by it.
 
 The executable's version information comes from the VERSION file at the repo
 root, which is also bundled, with the build id (build time) in its
-description. On Windows, assets/icon.png becomes its icon when that file
-exists. Each build writes ``build/nuitka/build_info.json`` (version, build id,
+description. src/assets/icon_light.ico is bundled for the window icon and, on
+Windows, is also the executable's icon. Each build writes ``build/nuitka/build_info.json`` (version, build id,
 whether it has OQS, Python and key package versions, and this checkout's path,
 commit, the commit's tree and a fingerprint of its uncommitted changes),
 bundled so the app logs it at startup, and
@@ -81,12 +81,12 @@ MIN_FREE_MEMORY_ENV = "BUILD_MIN_FREE_MEMORY_GB"
 RECORDED_DISTRIBUTIONS = (
     "Nuitka", "PyQt6", "PyQt6-Qt6", "keyring", "cryptography", "chardet", "psutil", "liboqs-python",
 )
-ICON_PNG = os.path.join("assets", "icon.png")
-ICON_ICO = os.path.join(BUILD_DIR, "protokoll_icon.ico")
+# Same as src/utils/app_paths.ICON_FILE.
+ICON_FILE = os.path.join("src", "assets", "icon_light.ico")
 
 # Shipped files, at the same relative paths src/utils/app_paths.resource_path()
 # resolves them under.
-DATA_FILES = (VERSION_FILE,)
+DATA_FILES = (VERSION_FILE, ICON_FILE)
 LOCALE_DIR = "locale"
 # Same source as requirements-optional.txt; not on PyPI.
 LIBOQS_PYTHON = "git+https://github.com/open-quantum-safe/liboqs-python.git"
@@ -112,19 +112,6 @@ _VERSIONS_PROBE = (
 _CHARDET_PROBE = "import os, chardet\nprint(os.path.dirname(os.path.abspath(chardet.__file__)))\n"
 # Code, not data, in a package folder.
 _CODE_SUFFIXES = (".py", ".pyc", ".pyd", ".pyi", ".so", ".dll")
-# Renders ICON_PNG (argv[1]) to a 256px .ico (argv[2]) with the build venv's Qt.
-_ICON_SCRIPT = (
-    "import sys\n"
-    "from PyQt6.QtCore import Qt\n"
-    "from PyQt6.QtGui import QGuiApplication, QImage\n"
-    "app = QGuiApplication(sys.argv[:1])\n"
-    "image = QImage(sys.argv[1])\n"
-    "if image.isNull():\n"
-    "    sys.exit(f'Cannot read {sys.argv[1]}')\n"
-    "image = image.scaled(256, 256, Qt.AspectRatioMode.KeepAspectRatio,\n"
-    "                     Qt.TransformationMode.SmoothTransformation)\n"
-    "sys.exit(0 if image.save(sys.argv[2], 'ICO') else 1)\n"
-)
 
 logger = logging.getLogger("build_exe")
 
@@ -280,17 +267,6 @@ def _locale_files() -> list:
     return sorted(os.path.relpath(path, REPO_ROOT) for path in glob.glob(pattern))
 
 
-def _has_icon() -> bool:
-    return os.path.isfile(os.path.join(REPO_ROOT, ICON_PNG))
-
-
-def _write_windows_icon(python: str) -> None:
-    """Render ICON_PNG to the .ico Nuitka needs, with the build venv's Qt."""
-    os.makedirs(BUILD_DIR, exist_ok=True)
-    env = dict(os.environ, QT_QPA_PLATFORM="offscreen")
-    subprocess.run([python, "-c", _ICON_SCRIPT, os.path.join(REPO_ROOT, ICON_PNG), ICON_ICO],
-                   env=env, check=True)
-
 
 def _common_args(exe_name: str, unpack_prefix: str, version: str, build_id: str) -> list:
     args = [
@@ -321,8 +297,8 @@ def _common_args(exe_name: str, unpack_prefix: str, version: str, build_id: str)
     ]
     args += [f"--include-data-files={f}={f}" for f in DATA_FILES]
     args += [f"--include-data-files={f}={f}" for f in _locale_files()]
-    if sys.platform == "win32" and _has_icon():
-        args.append(f"--windows-icon-from-ico={ICON_ICO}")
+    if sys.platform == "win32":
+        args.append(f"--windows-icon-from-ico={os.path.join(REPO_ROOT, ICON_FILE)}")
     return args
 
 
@@ -482,8 +458,6 @@ def main() -> None:
 
     _write_lock_file(python)
     _write_build_info(version, build_id, _environment_versions(python), with_oqs)
-    if sys.platform == "win32" and _has_icon():
-        _write_windows_icon(python)
     extra_args = _oqs_args(python, with_oqs) + _chardet_args(python)
 
     for base_name, entry, unpack_prefix, target_args in TARGETS:
